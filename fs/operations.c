@@ -243,7 +243,6 @@ int tfs_unlink(char const *target) {
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     (void)dest_path;
-    int d=0;
 
     /* Checks if the path name is valid */
     if (!valid_pathname(source_path)) {
