@@ -243,13 +243,13 @@ int tfs_unlink(char const *target) {
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     (void)dest_path;
+    // ^ this is a trick to keep the compiler from complaining about unused
+    // variables. TODO: remove
 
     /* Checks if the path name is valid */
     if (!valid_pathname(source_path)) {
         return -1;
     }
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
 
     PANIC("TODO: tfs_copy_from_external_fs");
 }
