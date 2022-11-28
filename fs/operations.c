@@ -251,5 +251,15 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
         return -1;
     }
 
+    inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+    ALWAYS_ASSERT(root_dir_inode != NULL,
+                  "tfs_copy_from_external_fs: root dir inode must exist");
+    int inum = tfs_lookup(dest_path, root_dir_inode);
+    size_t offset;
+    
+    if(inum == -1){
+        /* Create a new inode */
+    }
+
     PANIC("TODO: tfs_copy_from_external_fs");
 }
