@@ -255,10 +255,19 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     ALWAYS_ASSERT(root_dir_inode != NULL,
                   "tfs_copy_from_external_fs: root dir inode must exist");
     int inum = tfs_lookup(dest_path, root_dir_inode);
-    size_t offset;
     
+    // if the dest_path file does not exist in the TFS
     if(inum == -1){
-        /* Create a new inode */
+        inum = inode_create(T_FILE);
+        if (inum == -1) {
+            return -1; // no space in inode table
+        }
+
+        // Add entry in the root directory
+        if (add_dir_entry(root_dir_inode, dest_path + 1, inum) == -1) {
+            inode_delete(inum);
+            return -1; // no space in directory
+        }
     }
 
     PANIC("TODO: tfs_copy_from_external_fs");
