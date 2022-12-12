@@ -245,29 +245,43 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     // ^ this is a trick to keep the compiler from complaining about unused
     // variables. TODO: remove
 
-    /* Checks if the path name is valid */
-    if (!valid_pathname(source_path)) {
+    
+    int t = tfs_open(dest_path, TFS_O_CREAT);
+    if (t<0){
+        return -1;
+    }
+    FILE* imported = fopen(source_path, "r");
+    if (imported == NULL) {
+        tfs_close(t);
+        return -1;
+    }
+    char buffer[128];
+    memset(buffer,0,sizeof(buffer));
+    size_t bytesread = fread(&buffer, sizeof(char), sizeof(buffer)/sizeof(char)-1, imported); 
+    while (bytesread!= 0){
+        if ((int)bytesread < 0){
+            fclose(imported);
+            tfs_close(t);
+            return -1;
+        }
+        ssize_t byteswriten = tfs_write(t, buffer, bytesread);
+        if (byteswriten < 0 || byteswriten != bytesread){
+            fclose(imported);
+            tfs_close(t);
+            return -1;
+        }
+        memset(buffer,0,sizeof(buffer));
+
+        /* read the contents of the file */
+        bytesread = fread(&buffer, sizeof(char), sizeof(buffer)/sizeof(char)-1, imported);
+    }
+    if(fclose(imported) < 0){
+        tfs_close(t);
         return -1;
     }
 
-    inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
-    ALWAYS_ASSERT(root_dir_inode != NULL,
-                  "tfs_copy_from_external_fs: root dir inode must exist");
-    int inum = tfs_lookup(dest_path, root_dir_inode);
-    
-    // if the dest_path file does not exist in the TFS
-    if(inum == -1){
-        inum = inode_create(T_FILE);
-        if (inum == -1) {
-            return -1; // no space in inode table
-        }
-
-        // Add entry in the root directory
-        if (add_dir_entry(root_dir_inode, dest_path + 1, inum) == -1) {
-            inode_delete(inum);
-            return -1; // no space in directory
-        }
+    if(tfs_close(t) < 0){
+        return -1;
     }
-
-    PANIC("TODO: tfs_copy_from_external_fs");
+    return 0;
 }
