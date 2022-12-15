@@ -133,21 +133,29 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 }
 
 int tfs_sym_link(char const *target, char const *link_name) {
+    //atalhos soft link
     (void)target;
     (void)link_name;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
+
 
     PANIC("TODO: tfs_sym_link");
 }
 
 int tfs_link(char const *target, char const *link_name) {
-    (void)target;
-    (void)link_name;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
-
-    PANIC("TODO: tfs_link");
+    //nomes alternativos hard link
+    int inum;
+    inum = tfs_lookup(link_name, target);
+    if (inum < 0) {
+        return -1;
+    }
+    inode_t *inode = inode_get(inum);
+    int counter = 1;
+    if(counter == 0){
+        tfs_unlink(target);
+    } else {
+        add_dir_entry(inode, "hard_link", counter);
+        counter++;
+    }
 }
 
 int tfs_close(int fhandle) {
@@ -242,8 +250,6 @@ int tfs_unlink(char const *target) {
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
 
     
     int t = tfs_open(dest_path, TFS_O_CREAT);
