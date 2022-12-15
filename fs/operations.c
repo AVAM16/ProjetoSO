@@ -133,6 +133,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 }
 
 int tfs_sym_link(char const *target, char const *link_name) {
+    //atalhos : soft link
     (void)target;
     (void)link_name;
     // ^ this is a trick to keep the compiler from complaining about unused
@@ -142,7 +143,7 @@ int tfs_sym_link(char const *target, char const *link_name) {
 }
 
 int tfs_link(char const *target, char const *link_name) {
-    //nomes alternativos hard link
+    //nomes alternativos : hard link
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
     ALWAYS_ASSERT(root_dir_inode != NULL,
                 "tfs_open: root dir inode must exist");
