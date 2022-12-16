@@ -27,6 +27,8 @@ typedef struct {
     size_t i_size;
     int i_data_block;
     int n_links;
+    bool is_shortcut;
+    char* soft_link;
 
     // in a more complete FS, more fields could exist here
 } inode_t;

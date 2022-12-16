@@ -215,6 +215,7 @@ int inode_create(inode_type i_type) {
             inode->i_size = 0;
             inode->i_data_block = -1;
             inode->n_links = 1;
+            inode->is_shortcut = false;
 
             // run regular deletion process
             inode_delete(inumber);
