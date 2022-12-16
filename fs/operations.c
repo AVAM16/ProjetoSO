@@ -140,10 +140,10 @@ int tfs_sym_link(char const *target, char const *link_name) {
     if(!valid_pathname(link_name)){
         return -1;
     }
-    inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
-    ALWAYS_ASSERT(root_dir_inode != NULL,
-                "tfs_open: root dir inode must exist");
-    int inum = tfs_lookup(target,root_dir_inode);
+    //inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+    //ALWAYS_ASSERT(root_dir_inode != NULL,
+    //            "tfs_open: root dir inode must exist");
+    //int inum = tfs_lookup(target,root_dir_inode);
 
     PANIC("TODO: tfs_sym_link");
 }
