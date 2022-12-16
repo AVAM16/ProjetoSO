@@ -24,7 +24,6 @@ typedef enum { T_FILE, T_DIRECTORY } inode_type;
  */
 typedef struct {
     inode_type i_node_type;
-
     size_t i_size;
     int i_data_block;
     int n_links;

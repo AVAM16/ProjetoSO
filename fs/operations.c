@@ -161,11 +161,11 @@ int tfs_link(char const *target, char const *link_name) {
         return -1;
     }
     inode_t *inode = inode_get(inum);
-    if(add_dir_entry(inode, link_name, inum) <0){
+    if(add_dir_entry(root_dir_inode, link_name+1, inum) <0){
         return -1;
     } else{
         add_to_open_file_table(inum,inode->i_size);
-        inode->i_size++;
+        inode->n_links++;
     }
 
     return 0;
