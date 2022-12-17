@@ -203,6 +203,9 @@ int inode_create(inode_type i_type) {
 
     inode_t *inode = &inode_table[inumber];
     insert_delay(); // simulate storage access delay (to inode)
+    
+    inode->n_links = 1;
+    inode->is_shortcut = false;
 
     inode->i_node_type = i_type;
     switch (i_type) {
@@ -214,8 +217,6 @@ int inode_create(inode_type i_type) {
             // ensure fields are initialized
             inode->i_size = 0;
             inode->i_data_block = -1;
-            inode->n_links = 1;
-            inode->is_shortcut = false;
 
             // run regular deletion process
             inode_delete(inumber);

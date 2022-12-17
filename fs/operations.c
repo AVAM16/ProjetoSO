@@ -90,6 +90,13 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         inode_t *inode = inode_get(inum);
         ALWAYS_ASSERT(inode != NULL,
                       "tfs_open: directory files must have an inode");
+        if(inode->is_shortcut){
+            inum = tfs_lookup(inode->soft_link,root_dir_inode);
+            if(inum == -1){
+                return -1;
+            }
+            inode = inode_get(inum);
+        }
 
         // Truncate (if requested)
         if (mode & TFS_O_TRUNC) {
@@ -144,14 +151,18 @@ int tfs_sym_link(char const *target, char const *link_name) {
     if(inum < 0){
         return -1;
     }
-    int inum2 = inode_create(T_DIRECTORY);
-    if(inum2 < 0){
+    inum = inode_create(T_DIRECTORY);
+    if(inum < 0){
         return -1;
     }
-    inode_t* inode = inode_get(inum2);
+    inode_t* inode = inode_get(inum);
+    if(add_dir_entry(root_dir_inode, link_name+1, inum) == -1){
+        return -1;
+    }  
     inode->is_shortcut = true;
-    //inode->soft_link = malloc();
-    PANIC("TODO: tfs_sym_link");
+    inode->soft_link = malloc(sizeof(char*));
+    memcpy(inode->soft_link,target,strlen(target)+1);
+    return 0;
 }
 
 int tfs_link(char const *target, char const *link_name) {
@@ -167,13 +178,13 @@ int tfs_link(char const *target, char const *link_name) {
         return -1;
     }
     inode_t *inode = inode_get(inum);
-    if(add_dir_entry(root_dir_inode, link_name+1, inum) <0){
+    if(inode->is_shortcut){
         return -1;
-    } else{
-        add_to_open_file_table(inum,inode->i_size);
-        inode->n_links++;
     }
-
+    if(add_dir_entry(root_dir_inode, link_name+1, inum) == -1){
+        return -1;
+    } 
+    inode->n_links++;
     return 0;
 }
 
@@ -261,11 +272,23 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 }
 
 int tfs_unlink(char const *target) {
-    (void)target;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
-
-    PANIC("TODO: tfs_unlink");
+    inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+    ALWAYS_ASSERT(root_dir_inode != NULL,
+                "tfs_open: root dir inode must exist");
+    int inum = tfs_lookup(target,root_dir_inode);
+    if (inum < 0) {
+        return -1;
+    }
+    inode_t *inode = inode_get(inum);
+    if(inode->is_shortcut){
+        inode_delete(inum);
+    } else {
+        inode->n_links--;
+        if(inode->n_links == 0){
+            inode_delete(inum);
+        }
+    }
+    return clear_dir_entry(root_dir_inode,target+1); 
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
