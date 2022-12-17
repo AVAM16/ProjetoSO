@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
 /*
  * Persistent FS state
@@ -206,7 +207,7 @@ int inode_create(inode_type i_type) {
     
     inode->n_links = 1;
     inode->is_shortcut = false;
-
+    //pthread_rwlock_init(&inode->inodelock, NULL);
     inode->i_node_type = i_type;
     switch (i_type) {
     case T_DIRECTORY: {

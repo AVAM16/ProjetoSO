@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <pthread.h>
 
 /**
  * Directory entry
@@ -29,6 +30,7 @@ typedef struct {
     int n_links;
     bool is_shortcut;
     char* soft_link;
+    pthread_rwlock_t inodelock;
 
     // in a more complete FS, more fields could exist here
 } inode_t;
