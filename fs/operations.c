@@ -5,8 +5,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 #include "betterassert.h"
+
+pthread_mutex_t trinco = PTHREAD_MUTEX_INITIALIZER;
 
 tfs_params tfs_default_params() {
     tfs_params params = {
@@ -75,7 +78,9 @@ static int tfs_lookup(char const *name, inode_t const *root_inode) {
 
 int tfs_open(char const *name, tfs_file_mode_t mode) {
     // Checks if the path name is valid
+    pthread_mutex_lock(&trinco);
     if (!valid_pathname(name)) {
+        pthread_mutex_unlock(&trinco);
         return -1;
     }
 
@@ -109,20 +114,23 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         // Create inode
         inum = inode_create(T_FILE);
         if (inum == -1) {
+            pthread_mutex_unlock(&trinco);
             return -1; // no space in inode table
         }
 
         // Add entry in the root directory
         if (add_dir_entry(root_dir_inode, name + 1, inum) == -1) {
             inode_delete(inum);
+            pthread_mutex_unlock(&trinco);
             return -1; // no space in directory
         }
 
         offset = 0;
     } else {
+        pthread_mutex_unlock(&trinco);
         return -1;
     }
-
+    pthread_mutex_unlock(&trinco);
     // Finally, add entry to the open file table and return the corresponding
     // handle
     return add_to_open_file_table(inum, offset);
@@ -134,7 +142,9 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 
 int tfs_sym_link(char const *target, char const *link_name) {
     //atalhos : soft link
+    pthread_mutex_lock(&trinco);
     if(!valid_pathname(link_name)){
+        pthread_mutex_unlock(&trinco);
         return -1;
     }
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
@@ -142,21 +152,26 @@ int tfs_sym_link(char const *target, char const *link_name) {
                 "tfs_open: root dir inode must exist");
     int inum = tfs_lookup(target,root_dir_inode);
     if(inum < 0){
+        pthread_mutex_unlock(&trinco);
         return -1;
     }
     int inum2 = inode_create(T_DIRECTORY);
     if(inum2 < 0){
+        pthread_mutex_unlock(&trinco);
         return -1;
     }
     inode_t* inode = inode_get(inum2);
     inode->is_shortcut = true;
     //inode->soft_link = malloc();
-    PANIC("TODO: tfs_sym_link");
+    pthread_mutex_unlock(&trinco);
+    return 0;
 }
 
 int tfs_link(char const *target, char const *link_name) {
     //nomes alternativos : hard link
+    pthread_mutex_lock(&trinco);
     if(!valid_pathname(link_name)){
+        pthread_mutex_unlock(&trinco);
         return -1;
     }
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
@@ -164,33 +179,39 @@ int tfs_link(char const *target, char const *link_name) {
                 "tfs_open: root dir inode must exist");
     int inum = tfs_lookup(target,root_dir_inode);
     if (inum < 0) {
+        pthread_mutex_unlock(&trinco);
         return -1;
     }
     inode_t *inode = inode_get(inum);
     if(add_dir_entry(root_dir_inode, link_name+1, inum) <0){
+        pthread_mutex_unlock(&trinco);
         return -1;
     } else{
         add_to_open_file_table(inum,inode->i_size);
         inode->n_links++;
     }
-
+    pthread_mutex_unlock(&trinco);
     return 0;
 }
 
 int tfs_close(int fhandle) {
+    pthread_mutex_lock(&trinco);
     open_file_entry_t *file = get_open_file_entry(fhandle);
     if (file == NULL) {
+        pthread_mutex_unlock(&trinco);
         return -1; // invalid fd
     }
 
     remove_from_open_file_table(fhandle);
-
+    pthread_mutex_unlock(&trinco);
     return 0;
 }
 
 ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
+    pthread_mutex_lock(&trinco);
     open_file_entry_t *file = get_open_file_entry(fhandle);
     if (file == NULL) {
+        pthread_mutex_unlock(&trinco);
         return -1;
     }
 
@@ -209,6 +230,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             // If empty file, allocate new block
             int bnum = data_block_alloc();
             if (bnum == -1) {
+                pthread_mutex_unlock(&trinco);
                 return -1; // no space
             }
 
@@ -227,13 +249,15 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             inode->i_size = file->of_offset;
         }
     }
-
+    pthread_mutex_unlock(&trinco);
     return (ssize_t)to_write;
 }
 
 ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
+    pthread_mutex_lock(&trinco);
     open_file_entry_t *file = get_open_file_entry(fhandle);
     if (file == NULL) {
+        pthread_mutex_unlock(&trinco);
         return -1;
     }
 
@@ -256,7 +280,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         // The offset associated with the file handle is incremented accordingly
         file->of_offset += to_read;
     }
-
+    pthread_mutex_unlock(&trinco);
     return (ssize_t)to_read;
 }
 
@@ -272,7 +296,7 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     // ^ this is a trick to keep the compiler from complaining about unused
     // variables. TODO: remove
 
-    
+
     int t = tfs_open(dest_path, TFS_O_CREAT);
     if (t<0){
         return -1;
