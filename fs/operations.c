@@ -288,7 +288,7 @@ int tfs_unlink(char const *target) {
             inode_delete(inum);
         }
     }
-    return clear_dir_entry(root_dir_inode,target+1); 
+    return clear_dir_entry(root_dir_inode,target+1); //versao funciona
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
