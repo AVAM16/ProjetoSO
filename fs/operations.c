@@ -90,14 +90,15 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         inode_t *inode = inode_get(inum);
         ALWAYS_ASSERT(inode != NULL,
                       "tfs_open: directory files must have an inode");
+        pthread_rwlock_wrlock(&inode->inodelock);                  
         if(inode->is_shortcut){
             inum = tfs_lookup(inode->soft_link,root_dir_inode);
             if(inum == -1){
+                pthread_rwlock_unlock(&inode->inodelock);
                 return -1;
             }
             inode = inode_get(inum);
-        }
-
+        }     
         // Truncate (if requested)
         if (mode & TFS_O_TRUNC) {
             if (inode->i_size > 0) {
@@ -129,7 +130,6 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     } else {
         return -1;
     }
-
     // Finally, add entry to the open file table and return the corresponding
     // handle
     return add_to_open_file_table(inum, offset);
@@ -145,8 +145,10 @@ int tfs_sym_link(char const *target, char const *link_name) {
         return -1;
     }
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+    pthread_rwlock_rdlock(&root_dir_inode->inodelock);
     ALWAYS_ASSERT(root_dir_inode != NULL,
                 "tfs_open: root dir inode must exist");
+    pthread_rwlock_unlock(&root_dir_inode->inodelock);            
     int inum = tfs_lookup(target,root_dir_inode);
     if(inum < 0){
         return -1;
@@ -159,9 +161,11 @@ int tfs_sym_link(char const *target, char const *link_name) {
     if(add_dir_entry(root_dir_inode, link_name+1, inum) == -1){
         return -1;
     }  
+    pthread_rwlock_wrlock(&inode->inodelock);
     inode->is_shortcut = true;
     inode->soft_link = malloc(sizeof(char*));
     memcpy(inode->soft_link,target,strlen(target)+1);
+    pthread_rwlock_unlock(&inode->inodelock);
     return 0;
 }
 
@@ -171,13 +175,16 @@ int tfs_link(char const *target, char const *link_name) {
         return -1;
     }
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+    pthread_rwlock_rdlock(&root_dir_inode->inodelock);
     ALWAYS_ASSERT(root_dir_inode != NULL,
                 "tfs_open: root dir inode must exist");
+    pthread_rwlock_unlock(&root_dir_inode->inodelock);            
     int inum = tfs_lookup(target,root_dir_inode);
     if (inum < 0) {
         return -1;
     }
     inode_t *inode = inode_get(inum);
+    pthread_rwlock_wrlock(&inode->inodelock);
     if(inode->is_shortcut){
         return -1;
     }
@@ -185,6 +192,7 @@ int tfs_link(char const *target, char const *link_name) {
         return -1;
     } 
     inode->n_links++;
+    pthread_rwlock_unlock(&inode->inodelock);
     return 0;
 }
 
@@ -207,6 +215,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
 
     //  From the open file table entry, we get the inode
     inode_t *inode = inode_get(file->of_inumber);
+    pthread_rwlock_wrlock(&inode->inodelock);
     ALWAYS_ASSERT(inode != NULL, "tfs_write: inode of open file deleted");
 
     // Determine how many bytes to write
@@ -238,7 +247,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             inode->i_size = file->of_offset;
         }
     }
-
+    pthread_rwlock_unlock(&inode->inodelock);
     return (ssize_t)to_write;
 }
 
@@ -267,19 +276,21 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         // The offset associated with the file handle is incremented accordingly
         file->of_offset += to_read;
     }
-
     return (ssize_t)to_read;
 }
 
 int tfs_unlink(char const *target) {
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+    pthread_rwlock_rdlock(&root_dir_inode->inodelock);
     ALWAYS_ASSERT(root_dir_inode != NULL,
                 "tfs_open: root dir inode must exist");
+    pthread_rwlock_unlock(&root_dir_inode->inodelock);            
     int inum = tfs_lookup(target,root_dir_inode);
     if (inum < 0) {
         return -1;
     }
     inode_t *inode = inode_get(inum);
+    pthread_rwlock_wrlock(&inode->inodelock);
     if(inode->is_shortcut){
         inode_delete(inum);
     } else {
@@ -288,6 +299,7 @@ int tfs_unlink(char const *target) {
             inode_delete(inum);
         }
     }
+    pthread_rwlock_unlock(&inode->inodelock);
     return clear_dir_entry(root_dir_inode,target+1); //versao funciona
 }
 
