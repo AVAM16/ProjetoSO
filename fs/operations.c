@@ -18,7 +18,6 @@ tfs_params tfs_default_params() {
     return params;
 }
 
-pthread_mutex_t* inodelock;
 
 int tfs_init(tfs_params const *params_ptr) {
     tfs_params params;
@@ -26,11 +25,6 @@ int tfs_init(tfs_params const *params_ptr) {
         params = *params_ptr;
     } else {
         params = tfs_default_params();
-    }
-
-    inodelock = malloc(sizeof(pthread_mutex_t)*params.max_inode_count);
-    for(int k=0; k<params.max_inode_count;k++){
-        pthread_mutex_init(&inodelock[k],NULL);
     }
     
     if (state_init(params) != 0) {
@@ -49,11 +43,6 @@ int tfs_destroy() {
     if (state_destroy() != 0) {
         return -1;
     }
-    int inodelocks_len = (int)sizeof(inodelock)/(int)sizeof(pthread_mutex_t);
-    for(int k=0; k<inodelocks_len;k++){
-        pthread_mutex_destroy(&inodelock[k]);
-    }
-    free(inodelock);
     return 0;
 }
 
@@ -91,7 +80,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     }
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
     ALWAYS_ASSERT(root_dir_inode != NULL,
-                  "tfs_open: root dir inode must exist");
+                  "tfs_open: root dir inode must exist");             
     int inum = tfs_lookup(name, root_dir_inode);
     size_t offset;
 
