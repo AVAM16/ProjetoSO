@@ -104,10 +104,9 @@ int state_init(tfs_params params) {
     pthread_mutex_init(&inode_table_lock, NULL);
     pthread_mutex_init(&open_file_table_lock,NULL);
     pthread_mutex_init(&dir_lock,NULL);
-    pthread_rwlock_init(&inodelock, NULL);
     inodelock = malloc(sizeof(pthread_rwlock_t)*params.max_inode_count);
     for(int k=0; k<params.max_inode_count;k++){
-        pthread_mutex_init(&inodelock[k],NULL);
+        pthread_rwlock_init(&inodelock[k],NULL);
     }
     if (inode_table != NULL) {
         return -1; // already initialized
@@ -151,7 +150,7 @@ int state_destroy(void) {
     pthread_mutex_destroy(&dir_lock);
     int inodelocks_len = (int)sizeof(inodelock)/(int)sizeof(pthread_rwlock_t);
     for(int k=0; k<inodelocks_len;k++){
-        pthread_mutex_destroy(&inodelock[k]);
+        pthread_rwlock_destroy(&inodelock[k]);
     }
     free(inodelock);
 
@@ -559,7 +558,7 @@ void inodereadlocker(int inum){
     if (pthread_rwlock_rdlock(&inodelock[inum]) != 0) {
         exit(EXIT_FAILURE);
     }
-
+}
 void inodeunlocker(int inum){
     if (pthread_rwlock_unlock(&inodelock[inum]) != 0) {
         exit(EXIT_FAILURE);
