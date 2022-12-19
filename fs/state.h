@@ -30,7 +30,6 @@ typedef struct {
     int n_links;
     bool is_shortcut;
     char* soft_link;
-    pthread_mutex_t inodelock;
 
     // in a more complete FS, more fields could exist here
 } inode_t;
