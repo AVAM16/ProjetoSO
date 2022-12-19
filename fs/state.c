@@ -36,6 +36,8 @@ static allocation_state_t *free_open_file_entries;
 #define BLOCK_SIZE (fs_params.block_size)
 #define MAX_DIR_ENTRIES (BLOCK_SIZE / sizeof(dir_entry_t))
 
+pthread_mutex_t main_lock;
+
 static inline bool valid_inumber(int inumber) {
     return inumber >= 0 && inumber < INODE_TABLE_SIZE;
 }
@@ -95,6 +97,7 @@ static void insert_delay(void) {
  */
 int state_init(tfs_params params) {
     fs_params = params;
+    pthread_mutex_init(&main_lock, NULL);
 
     if (inode_table != NULL) {
         return -1; // already initialized
@@ -124,7 +127,6 @@ int state_init(tfs_params params) {
     for (size_t i = 0; i < MAX_OPEN_FILES; i++) {
         free_open_file_entries[i] = FREE;
     }
-
     return 0;
 }
 
@@ -134,6 +136,8 @@ int state_init(tfs_params params) {
  * Returns 0 if succesful, -1 otherwise.
  */
 int state_destroy(void) {
+    pthread_mutex_destroy(&main_lock);
+
     free(inode_table);
     free(freeinode_ts);
     free(fs_data);
@@ -204,7 +208,7 @@ int inode_create(inode_type i_type) {
 
     inode_t *inode = &inode_table[inumber];
     insert_delay(); // simulate storage access delay (to inode)
-    pthread_rwlock_init(&inode->inodelock, NULL);
+    pthread_mutex_init(&inode->inodelock, NULL);
     inode->n_links = 1;
     inode->is_shortcut = false;
     inode->i_node_type = i_type;
@@ -261,7 +265,7 @@ void inode_delete(int inumber) {
 
     ALWAYS_ASSERT(freeinode_ts[inumber] == TAKEN,
                   "inode_delete: inode already freed");
-
+    pthread_mutex_destroy(&inode_table[inumber].inodelock);
     if (inode_table[inumber].i_size > 0) {
         data_block_free(inode_table[inumber].i_data_block);
     }
@@ -469,16 +473,17 @@ void *data_block_get(int block_number) {
  *   - No space in open file table for a new open file.
  */
 int add_to_open_file_table(int inumber, size_t offset) {
+    pthread_mutex_lock(&main_lock);
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
         if (free_open_file_entries[i] == FREE) {
             free_open_file_entries[i] = TAKEN;
             open_file_table[i].of_inumber = inumber;
             open_file_table[i].of_offset = offset;
-
+            pthread_mutex_unlock(&main_lock);
             return i;
         }
     }
-
+    pthread_mutex_unlock(&main_lock);
     return -1;
 }
 
@@ -489,6 +494,7 @@ int add_to_open_file_table(int inumber, size_t offset) {
  *   - fhandle: file handle to free/close
  */
 void remove_from_open_file_table(int fhandle) {
+    pthread_mutex_lock(&main_lock);
     ALWAYS_ASSERT(valid_file_handle(fhandle),
                   "remove_from_open_file_table: file handle must be valid");
 
@@ -496,6 +502,7 @@ void remove_from_open_file_table(int fhandle) {
                   "remove_from_open_file_table: file handle must be taken");
 
     free_open_file_entries[fhandle] = FREE;
+    pthread_mutex_unlock(&main_lock);
 }
 
 /**
