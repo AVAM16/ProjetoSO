@@ -241,7 +241,7 @@ int inode_create(inode_type i_type) {
             // run regular deletion process
             inode_delete(inumber);
             pthread_rwlock_unlock(&inodelock[inumber]);
-            pthread_mutex_unlock(&dir_lock);
+            pthread_mutex_unlock(&inode_table_lock);
             return -1;
         }
         inode_table[inumber].i_size = BLOCK_SIZE;
@@ -264,7 +264,7 @@ int inode_create(inode_type i_type) {
         PANIC("inode_create: unknown file type");
     }
     pthread_rwlock_unlock(&inodelock[inumber]);
-    pthread_mutex_unlock(&dir_lock);
+    pthread_mutex_unlock(&inode_table_lock);
     return inumber;
 }
 
