@@ -308,13 +308,12 @@ inode_t *inode_get(int inumber) {
     return &inode_table[inumber];
 }
 
-/**inode_t *inode_get_secure(int inumber) {
+inode_t *inode_get_secure(int inumber) {
     pthread_mutex_lock(&inode_table_lock);
-    pthread_rwlock_
     inode_t *inode = inode_get(inumber);
     pthread_mutex_unlock(&inode_table_lock);
     return inode;
-}*/
+}
 
 /**
  * Clear the directory entry associated with a sub file.

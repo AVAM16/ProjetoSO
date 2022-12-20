@@ -77,7 +77,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     if (!valid_pathname(name)) {
         return -1;
     }
-    inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+    inode_t *root_dir_inode = inode_get_secure(ROOT_DIR_INUM);
     ALWAYS_ASSERT(root_dir_inode != NULL,
                   "tfs_open: root dir inode must exist");             
     int inum = tfs_lookup(name, root_dir_inode);
@@ -85,7 +85,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 
     if (inum >= 0) {
         // The file already exists
-        inode_t *inode = inode_get(inum);
+        inode_t *inode = inode_get_secure(inum);
         ALWAYS_ASSERT(inode != NULL,
                       "tfs_open: directory files must have an inode");
         if(inode->is_shortcut){
@@ -93,20 +93,25 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
             if(inum == -1){
                 return -1;
             }
-            inode = inode_get(inum);
+            inode = inode_get_secure(inum);
         }
         // Truncate (if requested)
         if (mode & TFS_O_TRUNC) {
+            inodewritelocker(inum);
             if (inode->i_size > 0) {
                 data_block_free(inode->i_data_block);
                 inode->i_size = 0;
             }
+            inodeunlocker(inum);
         }
         // Determine initial offset
         if (mode & TFS_O_APPEND) {
+            inodereadlocker(inum);
             offset = inode->i_size;
+            inodeunlocker(inum);
         } else {
             offset = 0;
+            
         }
     } else if (mode & TFS_O_CREAT) {
         // The file does not exist; the mode specified that it should be created
@@ -140,7 +145,7 @@ int tfs_sym_link(char const *target, char const *link_name) {
     if(!valid_pathname(link_name)){
         return -1;
     }
-    inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+    inode_t *root_dir_inode = inode_get_secure(ROOT_DIR_INUM);
     ALWAYS_ASSERT(root_dir_inode != NULL,
                 "tfs_open: root dir inode must exist");
     int inum = tfs_lookup(target,root_dir_inode);
@@ -155,12 +160,14 @@ int tfs_sym_link(char const *target, char const *link_name) {
     if(inum < 0){
         return -1;
     }
-    inode_t* inode = inode_get(inum);
+    inode_t* inode = inode_get_secure(inum);
     if(add_dir_entry(root_dir_inode, link_name+1, inum) == -1){
         return -1;
     } 
+    inodewritelocker(inum);
     inode->is_shortcut = true;
     inode->soft_link = malloc(sizeof(char*));
+    inodeunlocker(inum);
     memcpy(inode->soft_link,target,strlen(target)+1);
     return 0;
 }
@@ -170,7 +177,7 @@ int tfs_link(char const *target, char const *link_name) {
     if(!valid_pathname(link_name)){
         return -1;
     }
-    inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+    inode_t *root_dir_inode = inode_get_secure(ROOT_DIR_INUM);
     ALWAYS_ASSERT(root_dir_inode != NULL,
                 "tfs_open: root dir inode must exist");
     int inum = tfs_lookup(target,root_dir_inode);
@@ -182,13 +189,18 @@ int tfs_link(char const *target, char const *link_name) {
         return -1;
     }
     inode_t *inode = inode_get(inum);
+    inodereadlocker(inum);
     if(inode->is_shortcut){
+        inodeunlocker(inum);
         return -1;
     }
     if(add_dir_entry(root_dir_inode, link_name+1, inum) == -1){
         return -1; 
-    } 
+    }
+    inodeunlocker(inum);
+    inodewritelocker(inum); 
     inode->n_links++;
+    inodeunlocker(inum);
     return 0;
 }
 
@@ -210,7 +222,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     }
 
     //  From the open file table entry, we get the inode
-    inode_t *inode = inode_get(file->of_inumber);
+    inode_t *inode = inode_get_secure(file->of_inumber);
     ALWAYS_ASSERT(inode != NULL, "tfs_write: inode of open file deleted");
 
     // Determine how many bytes to write
@@ -218,7 +230,6 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     if (to_write + file->of_offset > block_size) {
         to_write = block_size - file->of_offset;
     }
-
     if (to_write > 0) {
         if (inode->i_size == 0) {
             // If empty file, allocate new block
@@ -252,7 +263,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     }
 
     // From the open file table entry, we get the inode
-    inode_t const *inode = inode_get(file->of_inumber);
+    inode_t const *inode = inode_get_secure(file->of_inumber);
     ALWAYS_ASSERT(inode != NULL, "tfs_read: inode of open file deleted");
 
     // Determine how many bytes to read
@@ -274,7 +285,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 }
 
 int tfs_unlink(char const *target) {
-    inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+    inode_t *root_dir_inode = inode_get_secure(ROOT_DIR_INUM);
     ALWAYS_ASSERT(root_dir_inode != NULL,
                 "tfs_open: root dir inode must exist");
     int inum = tfs_lookup(target,root_dir_inode);
@@ -282,14 +293,20 @@ int tfs_unlink(char const *target) {
         return -1;
     }
     inode_t *inode = inode_get(inum);
+    inodereadlocker(inum);
     if(inode->is_shortcut){
         inode_delete(inum);
     } else {
+        inodeunlocker(inum);
+        inodewritelocker(inum);
         inode->n_links--;
+        inodeunlocker(inum);
+        inodereadlocker(inum);
         if(inode->n_links == 0){
             inode_delete(inum);
         }
     }
+    inodeunlocker(inum);
     return clear_dir_entry(root_dir_inode,target+1); //versao funciona
 }
 
