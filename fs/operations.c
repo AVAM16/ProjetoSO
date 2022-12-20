@@ -62,7 +62,6 @@ static bool valid_pathname(char const *name) {
  * Returns the inumber of the file, -1 if unsuccessful.
  */
 static int tfs_lookup(char const *name, inode_t const *root_inode) {
-    // TODO: assert that root_inode is the root directory
     if (!valid_pathname(name)) {
         return -1;
     }
@@ -148,6 +147,10 @@ int tfs_sym_link(char const *target, char const *link_name) {
     if(inum < 0){
         return -1;
     }
+    inum = tfs_lookup(link_name,root_dir_inode);
+    if(inum != -1){
+        return -1;
+    }
     inum = inode_create(T_DIRECTORY);
     if(inum < 0){
         return -1;
@@ -172,6 +175,10 @@ int tfs_link(char const *target, char const *link_name) {
                 "tfs_open: root dir inode must exist");
     int inum = tfs_lookup(target,root_dir_inode);
     if (inum < 0) {
+        return -1;
+    }
+    int link_inum = tfs_lookup(link_name,root_dir_inode);
+    if(link_inum != -1){
         return -1;
     }
     inode_t *inode = inode_get(inum);
