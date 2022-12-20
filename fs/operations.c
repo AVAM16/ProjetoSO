@@ -1,3 +1,14 @@
+/**
+ * Grupo 7 - 2022/2023
+ * @file operations.c
+ * @author Bernardo Augusto ist1102820 Artur Martins ist1102503
+ * @brief 
+ * @version 0.1
+ * @date 2022-12-20
+ * 
+ * @copyright Copyright (c) 2022
+ * 
+ */
 #include "operations.h"
 #include "config.h"
 #include "state.h"
@@ -97,10 +108,14 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         }
         // Truncate (if requested)
         if (mode & TFS_O_TRUNC) {
-            inodewritelocker(inum);
+            inodereadlocker(inum);
             if (inode->i_size > 0) {
                 data_block_free(inode->i_data_block);
+                inodeunlocker(inum);
+                inodewritelocker(inum);
                 inode->i_size = 0;
+                inodeunlocker(inum);
+                inodereadlocker(inum);
             }
             inodeunlocker(inum);
         }

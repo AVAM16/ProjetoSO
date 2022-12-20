@@ -12,10 +12,10 @@ char buffer[40];
 
 char const link_path1[] = "/l1";
 char const link_path2[] = "/l2";
-char const link_path3[] = "/l3";
 
 void *thread1() {
     int f;
+    ssize_t r;
     
     f = tfs_copy_from_external_fs(path_src,path_copied_file);
     assert(f != -1);
@@ -23,11 +23,19 @@ void *thread1() {
     f = tfs_open(path_copied_file,TFS_O_CREAT);
     assert(f != -1);
 
-    f = tfs_link(path_copied_file,link_path1);
+    r = tfs_read(f, buffer, sizeof(buffer) - 1);
+    assert(r == strlen(str_ext_file));
+    assert(!memcmp(buffer, str_ext_file, strlen(str_ext_file)));
+
+    f = tfs_copy_from_external_fs(path_src, path_copied_file);
     assert(f != -1);
 
-    f = tfs_unlink(link_path1);
+    f = tfs_open(path_copied_file, TFS_O_CREAT);
     assert(f != -1);
+
+    r = tfs_read(f, buffer, sizeof(buffer) - 1);
+    assert(r == strlen(str_ext_file));
+    assert(!memcmp(buffer, str_ext_file, strlen(str_ext_file)));
 
     return NULL;
 }
@@ -38,15 +46,13 @@ void *thread2() {
     f = tfs_copy_from_external_fs(path_src,path_copied_file);
     assert(f != -1);
 
-    f = tfs_open(path_copied_file,TFS_O_CREAT);
+    f = tfs_open(path_copied_file, TFS_O_CREAT);
     assert(f != -1);
 
-    f = tfs_link(path_copied_file,link_path1);
-    assert(f != -1);
+    assert(tfs_sym_link(path_copied_file, link_path1) != -1);
 
-    f = tfs_unlink(link_path1);
-    assert(f != -1);
-    
+    assert(tfs_link(link_path1, link_path2) == -1);
+
     return NULL;
 }
 
@@ -56,15 +62,11 @@ void *thread3() {
     f = tfs_copy_from_external_fs(path_src,path_copied_file);
     assert(f != -1);
 
-    f = tfs_open(path_copied_file,TFS_O_CREAT);
+    f = tfs_open(path_copied_file, TFS_O_CREAT);
     assert(f != -1);
 
-    f = tfs_link(path_copied_file,link_path1);
-    assert(f != -1);
+    assert(tfs_sym_link(path_copied_file, link_path2) != -1);
 
-    f = tfs_unlink(link_path1);
-    assert(f != -1);
-    
     return NULL;
 }
 
