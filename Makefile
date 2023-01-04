@@ -73,7 +73,13 @@ endif
 all: $(TARGET_EXECS)
 
 test: $(TEST_TARGETS)
-
+	retcode=0; \
+	for f in $^; do \
+		echo "Running test $$f"; \
+		$$f || (retcode=1; echo FAIL); \
+		echo; \
+	done; \
+	exit $$retcode
 # The following target can be used to invoke clang-format on all the source and header
 # files. clang-format is a tool to format the source code based on the style specified
 # in the file '.clang-format'.
