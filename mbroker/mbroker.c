@@ -11,6 +11,7 @@
 
 
 #define PATHNAME ".pipe"
+#define BUFFER_SIZE (128)
 
 /* pthread_cond_t cond;
 
@@ -71,8 +72,21 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
     while (true) {
-        sleep(1);
+        char buffer[BUFFER_SIZE];
+        ssize_t ret = read(rx, buffer, BUFFER_SIZE - 1);
+        if (ret == 0) {
+            // ret == 0 indicates EOF
+            fprintf(stderr, "[INFO]: pipe closed\n");
+            return 0;
+        } else if (ret == -1) {
+            // ret == -1 indicates error
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        buffer[ret] = 0;
+        fputs(buffer, stdout);
     }
+    close(rx);
     fprintf(stderr, "usage: mbroker <pipename>\n");
     return -1;
 }
