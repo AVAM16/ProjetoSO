@@ -10,9 +10,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
 
 #define PATHNAME ".pipe"
-#define CONCATNATOR " | "
+#define MESSAGELENGTH 295
 
 void send_msg(int tx, char const *str) {
     size_t len = strlen(str);
@@ -25,11 +28,11 @@ void send_msg(int tx, char const *str) {
             exit(EXIT_FAILURE);
         }
 
-        written += ret;
+        written += (size_t) ret;
     }
 }
 
-static void EOF_handler(int sig) {
+static void EOF_handler() {
     fprintf(stderr, "Caught EOF - that's all folks!\n");
     exit(EXIT_SUCCESS);
 }
@@ -48,24 +51,16 @@ int main(int argc, char **argv) {
     strcpy(register_pipename,argv[1]);
     strcat(register_pipename, PATHNAME);
     strcpy(pipename,argv[2]);
-    int pipenamelength = strlen(argv[2]);
-    for (int a = pipenamelength; a <= 256; a++) {
-        pipename[a] = "\0";
-    }
+    int pipenamelength = (int) strlen(argv[2]);
+    pipename[pipenamelength + 1] = '\0';
     strcpy(box_name,argv[3]);
-    int boxnamelength = strlen(argv[3]);
-    for (int b = boxnamelength; b <= 32; b++) {
-        box_name[b] = "\0";
-    }
+    int boxnamelength = (int) strlen(argv[3]);
+    box_name[boxnamelength] = '\0';
     int rx = open(register_pipename, O_WRONLY);
     // [ code = 1 (uint8_t) ] | [ client_named_pipe_path (char[256]) ] | [ box_name (char[32]) ]
     uint8_t code = 1;
-    char * message = malloc(3*sizeof(CONCATNATOR) + sizeof(uint8_t) + 256 +32);
-    strcpy(message, code);
-    strcpy(message, CONCATNATOR);
-    strcpy(message, pipename);
-    strcpy(message, CONCATNATOR);
-    strcpy(message, box_name);
+    char message[MESSAGELENGTH];
+    sprintf(message, "%x | %s | %s", code, pipename, box_name);
     send_msg(rx, message);
     close(rx);
     for (;;) { // Loop forever, waiting for signals
