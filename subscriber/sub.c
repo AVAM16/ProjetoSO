@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     pipename[pipenamelength + 1] = '\0';
     strcpy(box_name,argv[3]);
     int boxnamelength = (int) strlen(argv[3]);
-   box_name[boxnamelength + 1] = '\0';
+    box_name[boxnamelength + 1] = '\0';
     int rx = open(register_pipename, O_WRONLY);
     // [ code = 2 (uint8_t) ] | [ client_named_pipe_path (char[256]) ] | [ box_name (char[32]) ]
     uint8_t code = 2;
