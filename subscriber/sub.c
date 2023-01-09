@@ -13,9 +13,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <math.h>
 
 #define PATHNAME ".pipe"
-#define MESSAGELENGTH 295
+#define MESSAGELENGTH 289
+#define PIPELENGTH 256
+#define BOXNAME 32 
 
 void send_msg(int tx, char const *str) {
     size_t len = strlen(str);
@@ -45,22 +48,25 @@ int main(int argc, char **argv) {
         fprintf(stderr, "error\n");
     }
     char * register_pipename ;
-    char pipename[256];
-    char box_name[32];
+    char pipename[PIPELENGTH];
+    char box_name[BOXNAME];
     register_pipename = malloc(sizeof(char)*strlen(argv[1]));
     strcpy(register_pipename,argv[1]);
     strcat(register_pipename, PATHNAME);
     strcpy(pipename,argv[2]);
     int pipenamelength = (int) strlen(argv[2]);
-    pipename[pipenamelength + 1] = '\0';
+    pipename[pipenamelength] = '\0';
     strcpy(box_name,argv[3]);
     int boxnamelength = (int) strlen(argv[3]);
-    box_name[boxnamelength + 1] = '\0';
+    box_name[boxnamelength] = '\0';
     int rx = open(register_pipename, O_WRONLY);
     // [ code = 2 (uint8_t) ] | [ client_named_pipe_path (char[256]) ] | [ box_name (char[32]) ]
     uint8_t code = 2;
     char message[MESSAGELENGTH];
-    sprintf(message, "%x | %s | %s", code, pipename, box_name);
+    char ccode = (char) code;
+    memcpy(message,ccode, 1);
+    memcpy(message, pipename, PIPELENGTH);
+    memcpy(message, box_name, BOXNAME);
     send_msg(rx, message);
     close(rx);
     for (;;) { // Loop forever, waiting for signals

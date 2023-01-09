@@ -8,10 +8,25 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
+#include "operations.h"
+#include "operations.c"
+#include "state.c"
 
 
 #define PATHNAME ".pipe"
 #define BUFFER_SIZE (128)
+
+typedef struct box
+{
+    char boxname[32];
+    char pipename[256];
+    int i; //0 se publisher 1 se subscriber
+};
 
 /* pthread_cond_t cond;
 
@@ -36,6 +51,39 @@ void *thr_func(void *ptr,pthread_mutex_t lock) {
     return NULL;
 } */
 
+void slice(const char *str, char *result, size_t start, size_t end)
+{
+    strncpy(result, str + start, end - start);
+}
+
+void register_publisher(char * pipename, char * boxname, struct box *userarray, int maxsessions){
+    if(tfs_lookup(boxname, ROOT_DIR_INUM) == -1){
+        fprintf(stderr, "Erro\n");
+    } else{
+        for (int a = 0; a < MAX_DIR_ENTRIES * maxsessions; a++) {
+            if (userarray[a].i == -1){
+                userarray[a].i = 0;
+                memcpy(userarray[a].boxname, boxname, 32);
+                memcpy(userarray[a].pipename, pipename, 256);
+            }
+        }
+    }
+}
+
+void register_subscriber(char * pipename, char * boxname, struct box *userarray, int maxsessions){
+    if(tfs_lookup(boxname, ROOT_DIR_INUM) == -1){
+        fprintf(stderr, "Erro\n");
+    } else{
+        for (int a = 0; a < MAX_DIR_ENTRIES * maxsessions; a++) {
+            if (userarray[a].i == -1){
+                userarray[a].i = 1;
+                memcpy(userarray[a].boxname, boxname, 32);
+                memcpy(userarray[a].pipename, pipename, 256);
+            }
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     if (argc != 3) {
         fprintf(stderr, "error\n");
@@ -44,7 +92,13 @@ int main(int argc, char **argv) {
     pipename = malloc(sizeof(char)*strlen(argv[1]));
     strcpy(pipename,argv[1]);
     strcat(pipename, PATHNAME);
-    //int max_sessions = atoi(argv[2]);
+    int max_sessions = atoi(argv[2]);
+    struct box userarray[max_sessions * MAX_DIR_ENTRIES];
+    for (int g = 0; g < max_sessions * MAX_DIR_ENTRIES; g++) {
+        userarray[g].i = -1;
+        userarray[g].boxname[0] = '\0';
+        userarray[g].pipename[0] = '\0';
+    }
     if (unlink(pipename) != 0 && errno != ENOENT) {
         fprintf(stderr, "[ERR]: unlink(%s) failed: %s\n", pipename,
                 strerror(errno));
@@ -84,7 +138,49 @@ int main(int argc, char **argv) {
             exit(EXIT_FAILURE);
         }
         buffer[ret] = 0;
-        fputs(buffer, stdout);
+        char ccode;
+        char pipename[256];
+        char box_name[32];
+        slice(buffer, ccode, 0, 1);
+        uint8_t code = (uint8_t) atoi(ccode);
+        slice(buffer, pipename, 1, 257);
+        slice(buffer, box_name, 257, 289);
+        switch (code){
+        case(1):{
+            register_publisher(pipename,box_name, userarray, max_sessions);
+            break;
+        };
+        case(2):{
+            register_subscriber(pipename,box_name, userarray, max_sessions);
+            break;
+        }
+        case(3):{
+            break;
+        }
+        case(4):{
+            break;
+        }
+        case(5):{
+            break;
+        }
+        case(6):{
+            break;
+        }
+        case(7):{
+            break;
+        }
+        case(8):{
+            break;
+        }
+        case(9):{
+            break;
+        }
+        case(10):{
+            break;
+        }
+        default:
+            fprintf(stderr, "Erro\n");
+        }
     }
     close(rx);
     fprintf(stderr, "usage: mbroker <pipename>\n");

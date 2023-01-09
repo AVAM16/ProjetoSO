@@ -13,10 +13,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <math.h>
 
 #define PATHNAME ".pipe"
-#define MESSAGELENGTH 295
-#define MESSAGELISTLENGTH 260
+#define MESSAGELENGTH 289
+#define MESSAGELISTLENGTH 257
+#define PIPELENGTH 256
+#define BOXNAME 32
+
 static void print_usage() {
     fprintf(stderr, "usage: \n"
                     "   manager <register_pipe_name> create <box_name>\n"
@@ -41,37 +45,45 @@ void send_msg(int tx, char const *str) {
 
 int main(int argc, char **argv) {
     char * register_pipename ;
-    char pipename[256];
+    char pipename[PIPELENGTH];
     register_pipename = malloc(sizeof(char)*strlen(argv[1]));
     strcpy(register_pipename,argv[1]);
     strcat(register_pipename, PATHNAME);
     strcpy(pipename,argv[2]);
     int pipenamelength = (int) strlen(argv[2]);
-    pipename[pipenamelength + 1] = '\0';
+    pipename[pipenamelength] = '\0';
     if (argc == 4) {
         int rx = open(register_pipename, O_WRONLY);
         uint8_t code = 7;
         char message[MESSAGELISTLENGTH];
-        sprintf(message, "%x | %s", code, pipename);
+        char ccode = (char) code;
+        memcpy(message,ccode, 1);
+        memcpy(message, pipename, PIPELENGTH);
         send_msg(rx, message);
         close(rx);
     } else if(argc == 5){
         char * namefour;
         namefour = malloc(sizeof(char)*strlen(argv[4]));
-        char box_name[32];
+        char box_name[BOXNAME];
         strcpy(box_name,argv[4]);
         int boxnamelength = (int) strlen(argv[4]);
-        box_name[boxnamelength + 1] = '\0';
+        box_name[boxnamelength] = '\0';
         int rx = open(register_pipename, O_WRONLY);
         if(strcmp(namefour, "create") == 0) {
             uint8_t code = 3;
             char message[MESSAGELENGTH];
-            sprintf(message, "%x | %s | %s", code, pipename, box_name);
+            char ccode = (char) code;
+            memcpy(message,ccode, 1);
+            memcpy(message, pipename, PIPELENGTH);
+            memcpy(message, box_name, BOXNAME);
             send_msg(rx, message);
         }else{
             uint8_t code = 5;
             char message[MESSAGELENGTH];
-            sprintf(message, "%x | %s | %s", code, pipename, box_name);
+            char ccode = (char) code;
+            memcpy(message,ccode, 1);
+            memcpy(message, pipename, PIPELENGTH);
+            memcpy(message, box_name, BOXNAME);
             send_msg(rx, message);
         }
         close(rx);
