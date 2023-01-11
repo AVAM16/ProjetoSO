@@ -20,8 +20,9 @@
 
 #define PATHNAME ".pipe"
 #define BUFFER_SIZE (128)
+#define BOXCREATERESPONSE 1029
 
-typedef struct box
+struct box
 {
     char boxname[32];
     char pipename[256];
@@ -29,7 +30,23 @@ typedef struct box
 };
 
 /* pthread_cond_t cond;
+*/
 
+void send_msg(int tx, char const *str) {
+    size_t len = strlen(str);
+    size_t written = 0;
+
+    while (written < len) {
+        ssize_t ret = write(tx, str + written, len - written);
+        if (ret < 0) {
+            fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        written += (size_t) ret;
+    }
+}
+/*
 void *thr_func(void *ptr,pthread_mutex_t lock) {
     // first step: wait until the value is positive
     if (pthread_mutex_lock(&lock) != 0)
@@ -50,6 +67,24 @@ void *thr_func(void *ptr,pthread_mutex_t lock) {
 
     return NULL;
 } */
+
+char *convert(uint8_t *a)
+{
+  char* buffer2;
+  int i;
+
+  buffer2 = malloc(9);
+  if (!buffer2)
+    return NULL;
+
+  buffer2[8] = 0;
+  for (i = 0; i <= 7; i++)
+    buffer2[7 - i] = (((*a) >> i) & (0x01)) + '0';
+
+  puts(buffer2);
+
+  return buffer2;
+}
 
 void slice(const char *str, char *result, size_t start, size_t end)
 {
@@ -82,6 +117,59 @@ void register_subscriber(char * pipename, char * boxname, struct box *userarray,
             }
         }
     }
+}
+
+void create_box(char * pipename, char * boxname) {
+    int32_t return_code;
+    char error_message[1024];
+    if(tfs_lookup(boxname, ROOT_DIR_INUM) != -1){
+        return_code = -1;
+        memcpy(error_message, "Caixa existe", 1024);
+    } else{
+        return_code = 0;
+        error_message[0] = '\0';
+        int i = tfs_open(boxname, TFS_O_CREAT);
+        if(tfs_close(i) == -1) {
+            memcpy(error_message, "ERRO", 1024);
+        }
+    }
+    int rx = open(pipename, O_WRONLY);
+    char creturn_code[4];
+    sprintf( creturn_code, "%I64u", return_code);
+    uint8_t code = 4;
+    char *ccode = convert(&code);
+    char message[BOXCREATERESPONSE];
+    memcpy(message,ccode, 1);
+    memcpy(message, creturn_code, 4);
+    memcpy(message, error_message, 1024);
+    send_msg(rx, message);
+    close(rx);
+}
+
+void remove_box(char * pipename, char * boxname) {
+    int32_t return_code;
+    char error_message[1024];
+    if(tfs_lookup(boxname, ROOT_DIR_INUM) == -1){
+        return_code = -1;
+        memcpy(error_message, "Caixa nao existe", 1024);
+    } else{
+        return_code = 0;
+        error_message[0] = '\0';
+        if (tfs_unlink(boxname) == -1) {
+            memcpy(error_message, "ERRO", 1024);
+        }
+    }
+    int rx = open(pipename, O_WRONLY);
+    char creturn_code[4];
+    sprintf( creturn_code, "%I64u", return_code);
+    uint8_t code = 6;
+    char *ccode = convert(&code);
+    char message[BOXCREATERESPONSE];
+    memcpy(message,ccode, 1);
+    memcpy(message, creturn_code, 4);
+    memcpy(message, error_message, 1024);
+    send_msg(rx, message);
+    close(rx);
 }
 
 int main(int argc, char **argv) {
@@ -138,8 +226,8 @@ int main(int argc, char **argv) {
             exit(EXIT_FAILURE);
         }
         buffer[ret] = 0;
-        char ccode;
-        char pipename[256];
+        char *ccode;
+        char client_pipename[256];
         char box_name[32];
         slice(buffer, ccode, 0, 1);
         uint8_t code = (uint8_t) atoi(ccode);
@@ -147,35 +235,22 @@ int main(int argc, char **argv) {
         slice(buffer, box_name, 257, 289);
         switch (code){
         case(1):{
-            register_publisher(pipename,box_name, userarray, max_sessions);
+            register_publisher(client_pipename,box_name, userarray, max_sessions);
             break;
         };
         case(2):{
-            register_subscriber(pipename,box_name, userarray, max_sessions);
+            register_subscriber(client_pipename,box_name, userarray, max_sessions);
             break;
         }
         case(3):{
-            break;
-        }
-        case(4):{
+            create_box(client_pipename, box_name);
             break;
         }
         case(5):{
-            break;
-        }
-        case(6):{
+            remove_box(client_pipename, box_name);
             break;
         }
         case(7):{
-            break;
-        }
-        case(8):{
-            break;
-        }
-        case(9):{
-            break;
-        }
-        case(10):{
             break;
         }
         default:
