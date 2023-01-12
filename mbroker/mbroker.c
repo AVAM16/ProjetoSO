@@ -16,21 +16,27 @@
 #include "operations.h"
 #include "operations.c"
 #include "state.c"
+#include "producer-consumer.h"
 
 
 #define PATHNAME ".pipe"
-#define BUFFER_SIZE (128)
+#define BUFFER_SIZE (289)
 #define BOXCREATERESPONSE 1029
 
-struct box
+typedef struct
 {
     char boxname[32];
     char pipename[256];
     int i; //0 se publisher 1 se subscriber
-};
+}box;
 
 /* pthread_cond_t cond;
 */
+int sessions = 0;
+pthread_t *tid;
+box *userarray;
+pthread_mutex_t userarraylock = PTHREAD_MUTEX_INITIALIZER;
+
 
 void send_msg(int tx, char const *str) {
     size_t len = strlen(str);
@@ -88,35 +94,48 @@ char *convert(uint8_t *a)
 
 void slice(const char *str, char *result, size_t start, size_t end)
 {
-    strncpy(result, str + start, end - start);
+    memcpy(result, str + start, end - start);
 }
 
-void register_publisher(char * pipename, char * boxname, struct box *userarray, int maxsessions){
+ void *threadfunction() {
+    return;
+}
+
+void register_publisher(char * pipename, char * boxname){
+    pthread_mutex_lock(&userarraylock);
     if(tfs_lookup(boxname, ROOT_DIR_INUM) == -1){
         fprintf(stderr, "Erro\n");
     } else{
-        for (int a = 0; a < MAX_DIR_ENTRIES * maxsessions; a++) {
+        for (int a = 0; a < MAX_DIR_ENTRIES ; a++) {
             if (userarray[a].i == -1){
                 userarray[a].i = 0;
                 memcpy(userarray[a].boxname, boxname, 32);
                 memcpy(userarray[a].pipename, pipename, 256);
+                sessions++;
+            } else if(userarray[a].boxname == boxname && userarray[a].i == 0){
+                fprintf(stderr,"Erro, Box já está associada com um Publisher");
             }
         }
     }
+    pthread_mutex_unlock(&userarraylock);
+
 }
 
-void register_subscriber(char * pipename, char * boxname, struct box *userarray, int maxsessions){
+void register_subscriber(char * pipename, char * boxname){
+    pthread_mutex_lock(&userarraylock);
     if(tfs_lookup(boxname, ROOT_DIR_INUM) == -1){
         fprintf(stderr, "Erro\n");
     } else{
-        for (int a = 0; a < MAX_DIR_ENTRIES * maxsessions; a++) {
+        for (int a = 0; a < MAX_DIR_ENTRIES ; a++) {
             if (userarray[a].i == -1){
                 userarray[a].i = 1;
                 memcpy(userarray[a].boxname, boxname, 32);
                 memcpy(userarray[a].pipename, pipename, 256);
+                sessions++;
             }
         }
     }
+    pthread_mutex_unlock(&userarraylock);
 }
 
 void create_box(char * pipename, char * boxname) {
@@ -130,7 +149,7 @@ void create_box(char * pipename, char * boxname) {
         error_message[0] = '\0';
         int i = tfs_open(boxname, TFS_O_CREAT);
         if(tfs_close(i) == -1) {
-            memcpy(error_message, "ERRO", 1024);
+            memcpy(error_message, "ERRO", 5);
         }
     }
     int rx = open(pipename, O_WRONLY);
@@ -151,7 +170,7 @@ void remove_box(char * pipename, char * boxname) {
     char error_message[1024];
     if(tfs_lookup(boxname, ROOT_DIR_INUM) == -1){
         return_code = -1;
-        memcpy(error_message, "Caixa nao existe", 1024);
+        memcpy(error_message, "Caixa nao existe", 17);
     } else{
         return_code = 0;
         error_message[0] = '\0';
@@ -176,13 +195,18 @@ int main(int argc, char **argv) {
     if (argc != 3) {
         fprintf(stderr, "error\n");
     }
-    char * pipename ;
+    char * pipename;        //register_pipename, pipe que recebe os pedidos de registo dos clientes 
     pipename = malloc(sizeof(char)*strlen(argv[1]));
     strcpy(pipename,argv[1]);
     strcat(pipename, PATHNAME);
     int max_sessions = atoi(argv[2]);
-    struct box userarray[max_sessions * MAX_DIR_ENTRIES];
-    for (int g = 0; g < max_sessions * MAX_DIR_ENTRIES; g++) {
+    tid = malloc(max_sessions * sizeof(pthread_t));
+    userarray = malloc(INODE_TABLE_SIZE * sizeof(box));
+    pc_queue_t queue;
+    for(int i = 0; i < max_sessions; i++) {
+        pthread_create(&tid[i], NULL, threadfunction, NULL);
+    }
+    for (int g = 0; g <  MAX_DIR_ENTRIES; g++) {
         userarray[g].i = -1;
         userarray[g].boxname[0] = '\0';
         userarray[g].pipename[0] = '\0';
@@ -235,11 +259,11 @@ int main(int argc, char **argv) {
         slice(buffer, box_name, 257, 289);
         switch (code){
         case(1):{
-            register_publisher(client_pipename,box_name, userarray, max_sessions);
+            register_publisher(client_pipename,box_name);
             break;
         };
         case(2):{
-            register_subscriber(client_pipename,box_name, userarray, max_sessions);
+            register_subscriber(client_pipename,box_name);
             break;
         }
         case(3):{

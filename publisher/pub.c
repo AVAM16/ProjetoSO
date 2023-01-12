@@ -60,13 +60,12 @@ int main(int argc, char **argv) {
     int boxnamelength = (int) strlen(argv[3]);
     box_name[boxnamelength] = '\0';
     int rx = open(register_pipename, O_WRONLY);
-    // [ code = 1 (uint8_t) ] | [ client_named_pipe_path (char[256]) ] | [ box_name (char[32]) ]
-    uint8_t code = 1;
+    uint8_t code = 1;     // [ code = 1 (uint8_t) ] | [ client_named_pipe_path (char[256]) ] | [ box_name (char[32]) ]
     char message[MESSAGELENGTH];
     char ccode = (char) code;
     memcpy(message,ccode, 1);
     memcpy(message, pipename, PIPELENGTH);
-    memcpy(message, box_name, BOXNAME + 1);
+    memcpy(message, box_name, BOXNAME);
     send_msg(rx, message);
     close(rx);
     for (;;) { // Loop forever, waiting for signals
