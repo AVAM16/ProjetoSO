@@ -1,5 +1,7 @@
 #include "producer-consumer.h"
 
+int g_value = 0;
+
 int pcq_create(pc_queue_t *queue, size_t capacity){
     pthread_mutex_init(&queue->pcq_current_size_lock, NULL);
     pthread_mutex_init(&queue->pcq_head_lock, NULL);
@@ -8,13 +10,19 @@ int pcq_create(pc_queue_t *queue, size_t capacity){
     pthread_cond_init(&queue->pcq_pusher_condvar, NULL);
     pthread_mutex_init(&queue->pcq_popper_condvar_lock, NULL);
     pthread_cond_init(&queue->pcq_popper_condvar, NULL);
+    pthread_mutex_lock(&queue->pcq_head_lock);
+    pthread_mutex_lock(&queue->pcq_current_size_lock);
+    pthread_mutex_lock(&queue->pcq_tail_lock);
     queue->pcq_capacity = capacity;
     queue->pcq_head = queue->pcq_current_size = 0;
     queue->pcq_tail = capacity - 1;
-    queue->pcq_buffer = malloc(queue->pcq_capacity * sizeof(void*));
+    queue->pcq_buffer = (void**)malloc(queue->pcq_capacity * sizeof(void*));
     for(int i = 0; i < queue->pcq_capacity; i++) {
-        queue->pcq_buffer[i] = (void*)malloc(3000); // nao compreendo a parte do malloc ao pcq_buffer
+        queue->pcq_buffer[i] = (void*)malloc(sizeof(void)); // nao compreendo a parte do malloc ao pcq_buffer
     }
+    pthread_mutex_unlock(&queue->pcq_tail_lock);
+    pthread_mutex_unlock(&queue->pcq_current_size_lock);
+    pthread_mutex_unlock(&queue->pcq_head_lock);
 }
 
 int pcq_destroy(pc_queue_t *queue){
@@ -25,20 +33,42 @@ int pcq_destroy(pc_queue_t *queue){
 }
 
 int pcq_enqueue(pc_queue_t *queue, void *elem){
+    pthread_mutex_lock(&queue->pcq_current_size_lock);
+    pthread_mutex_lock(&queue->pcq_tail_lock);
     if (queue->pcq_current_size == queue->pcq_capacity){
-        sleep(5);
-    }   
+        pthread_mutex_lock(&queue->pcq_pusher_condvar_lock);
+        while(g_value == 0){
+            pthread_cond_wait(&queue->pcq_pusher_condvar, &queue->pcq_pusher_condvar_lock);
+        }
+        pthread_mutex_unlock(&queue->pcq_pusher_condvar_lock);
+    } else if(queue->pcq_current_size == 0) {
+        g_value--;
+        pthread_cond_signal(&queue->pcq_popper_condvar);
+    } 
     queue->pcq_tail = (queue->pcq_tail + 1) % queue->pcq_capacity;
     queue->pcq_buffer[queue->pcq_tail] = elem;
     queue->pcq_current_size = queue->pcq_current_size + 1;
+    pthread_mutex_unlock(&queue->pcq_tail_lock);
+    pthread_mutex_unlock(&queue->pcq_current_size_lock);
 }
 
 void *pcq_dequeue(pc_queue_t *queue){
+    pthread_mutex_lock(&queue->pcq_current_size_lock);
+    pthread_mutex_lock(&queue->pcq_head_lock);
     if (queue->pcq_current_size == 0){
-        sleep(5);
+        pthread_mutex_lock(&queue->pcq_popper_condvar_lock);
+        while(g_value == 1){
+            pthread_cond_wait(&queue->pcq_popper_condvar, &queue->pcq_popper_condvar_lock);
+        }
+        pthread_mutex_unlock(&queue->pcq_popper_condvar_lock);
+    } else if(queue->pcq_current_size == queue ->pcq_capacity) {
+        g_value++;
+        pthread_cond_signal(&queue->pcq_pusher_condvar);
     }
     void * elem = queue->pcq_buffer[queue->pcq_head];
     queue->pcq_head = (queue->pcq_head + 1) % queue->pcq_capacity;
     queue->pcq_current_size = queue->pcq_current_size - 1;
+    pthread_mutex_unlock(&queue->pcq_head_lock);
+    pthread_mutex_unlock(&queue->pcq_current_size_lock);
     return elem;
 }
