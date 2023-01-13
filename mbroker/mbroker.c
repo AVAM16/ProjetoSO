@@ -16,17 +16,21 @@
 #include "operations.h"
 #include "operations.c"
 #include "state.c"
+#include "producer-consumer.c"
 #include "producer-consumer.h"
 
 
 #define PATHNAME ".pipe"
 #define BUFFER_SIZE (289)
 #define BOXCREATERESPONSE 1029
+#define PIPENAME_SIZE 256
+#define BOXNAME_SIZE 32
+#define ERROR_MESSAGE_SIZE 1024
 
 typedef struct
 {
-    char boxname[32];
-    char pipename[256];
+    char boxname[BOXNAME_SIZE];
+    char pipename[PIPENAME_SIZE];
     int i; //0 se publisher 1 se subscriber
 }box;
 
@@ -52,27 +56,6 @@ void send_msg(int tx, char const *str) {
         written += (size_t) ret;
     }
 }
-/*
-void *thr_func(void *ptr,pthread_mutex_t lock) {
-    // first step: wait until the value is positive
-    if (pthread_mutex_lock(&lock) != 0)
-        exit(EXIT_FAILURE);
-
-    // TO DO: wait g_value==0
-    while(g_value == 0){
-        pthread_cond_wait(&cond, &lock);
-    }
-    // second step: change the value
-    fprintf(stdout, "[thread #%ld] read value=%d, will increment\n", pthread_self(),
-           g_value);
-    g_value++;
-
-    if (pthread_mutex_unlock(&lock) != 0) {
-        exit(EXIT_FAILURE);
-    }
-
-    return NULL;
-} */
 
 char *convert(uint8_t *a)
 {
@@ -97,7 +80,34 @@ void slice(const char *str, char *result, size_t start, size_t end)
     memcpy(result, str + start, end - start);
 }
 
- void *threadfunction() {
+void *threadfunction(){
+    int b = 0;
+    for (int a = 0; a < MAX_DIR_ENTRIES ; a++) {
+        if (userarray[a].i != -1){
+            b = a;
+            break;
+        }
+    }
+    if (userarray[b].i == 0){
+        int rx = open(userarray[b].pipename, O_RDONLY);
+        while(true){
+            char buffer[BUFFER_SIZE];
+            ssize_t ret = read(rx, buffer, BUFFER_SIZE - 1);
+            if (ret == 0) {
+                // ret == 0 indicates EOF
+                fprintf(stderr, "[INFO]: pipe closed\n");
+                return 0;
+            } else if (ret == -1) {
+                // ret == -1 indicates error
+                fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+            buffer[ret] = 0;
+        }
+    } else {
+        int rx = open(userarray[b].pipename, O_WRONLY);
+
+    }
     return;
 }
 
@@ -109,9 +119,10 @@ void register_publisher(char * pipename, char * boxname){
         for (int a = 0; a < MAX_DIR_ENTRIES ; a++) {
             if (userarray[a].i == -1){
                 userarray[a].i = 0;
-                memcpy(userarray[a].boxname, boxname, 32);
-                memcpy(userarray[a].pipename, pipename, 256);
+                memcpy(userarray[a].boxname, boxname, BOXNAME_SIZE);
+                memcpy(userarray[a].pipename, pipename, PIPENAME_SIZE);
                 sessions++;
+                break;
             } else if(userarray[a].boxname == boxname && userarray[a].i == 0){
                 fprintf(stderr,"Erro, Box já está associada com um Publisher");
             }
@@ -129,9 +140,10 @@ void register_subscriber(char * pipename, char * boxname){
         for (int a = 0; a < MAX_DIR_ENTRIES ; a++) {
             if (userarray[a].i == -1){
                 userarray[a].i = 1;
-                memcpy(userarray[a].boxname, boxname, 32);
-                memcpy(userarray[a].pipename, pipename, 256);
+                memcpy(userarray[a].boxname, boxname, BOXNAME_SIZE);
+                memcpy(userarray[a].pipename, pipename, PIPENAME_SIZE);
                 sessions++;
+                break;
             }
         }
     }
@@ -140,10 +152,10 @@ void register_subscriber(char * pipename, char * boxname){
 
 void create_box(char * pipename, char * boxname) {
     int32_t return_code;
-    char error_message[1024];
+    char error_message[ERROR_MESSAGE_SIZE];
     if(tfs_lookup(boxname, ROOT_DIR_INUM) != -1){
         return_code = -1;
-        memcpy(error_message, "Caixa existe", 1024);
+        memcpy(error_message, "Caixa existe", ERROR_MESSAGE_SIZE);
     } else{
         return_code = 0;
         error_message[0] = '\0';
@@ -160,14 +172,14 @@ void create_box(char * pipename, char * boxname) {
     char message[BOXCREATERESPONSE];
     memcpy(message,ccode, 1);
     memcpy(message, creturn_code, 4);
-    memcpy(message, error_message, 1024);
+    memcpy(message, error_message, ERROR_MESSAGE_SIZE);
     send_msg(rx, message);
     close(rx);
 }
 
 void remove_box(char * pipename, char * boxname) {
     int32_t return_code;
-    char error_message[1024];
+    char error_message[ERROR_MESSAGE_SIZE];
     if(tfs_lookup(boxname, ROOT_DIR_INUM) == -1){
         return_code = -1;
         memcpy(error_message, "Caixa nao existe", 17);
@@ -175,7 +187,7 @@ void remove_box(char * pipename, char * boxname) {
         return_code = 0;
         error_message[0] = '\0';
         if (tfs_unlink(boxname) == -1) {
-            memcpy(error_message, "ERRO", 1024);
+            memcpy(error_message, "ERRO", ERROR_MESSAGE_SIZE);
         }
     }
     int rx = open(pipename, O_WRONLY);
@@ -186,7 +198,7 @@ void remove_box(char * pipename, char * boxname) {
     char message[BOXCREATERESPONSE];
     memcpy(message,ccode, 1);
     memcpy(message, creturn_code, 4);
-    memcpy(message, error_message, 1024);
+    memcpy(message, error_message, ERROR_MESSAGE_SIZE);
     send_msg(rx, message);
     close(rx);
 }
@@ -195,11 +207,11 @@ int main(int argc, char **argv) {
     if (argc != 3) {
         fprintf(stderr, "error\n");
     }
-    char * pipename;        //register_pipename, pipe que recebe os pedidos de registo dos clientes 
-    pipename = malloc(sizeof(char)*strlen(argv[1]));
-    strcpy(pipename,argv[1]);
-    strcat(pipename, PATHNAME);
-    int max_sessions = atoi(argv[2]);
+    char * register_pipename;        //register_pipename, pipe que recebe os pedidos de registo dos clientes 
+    register_pipename = malloc(sizeof(char)*strlen(argv[1]));
+    strcpy(register_pipename,argv[1]);
+    strcat(register_pipename, PATHNAME);
+    long unsigned int max_sessions = (long unsigned int)atoi(argv[2]);
     tid = malloc(max_sessions * sizeof(pthread_t));
     userarray = malloc(INODE_TABLE_SIZE * sizeof(box));
     pc_queue_t queue;
@@ -211,28 +223,17 @@ int main(int argc, char **argv) {
         userarray[g].boxname[0] = '\0';
         userarray[g].pipename[0] = '\0';
     }
-    if (unlink(pipename) != 0 && errno != ENOENT) {
-        fprintf(stderr, "[ERR]: unlink(%s) failed: %s\n", pipename,
+    if (unlink(register_pipename) != 0 && errno != ENOENT) {
+        fprintf(stderr, "[ERR]: unlink(%s) failed: %s\n", register_pipename,
                 strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    if (mkfifo(pipename, 0640) != 0) {
+    if (mkfifo(register_pipename, 0640) != 0) {
         fprintf(stderr, "[ERR]: mkfifo failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
-    /* pthread_mutex_t trinco[max_sessions];
-    pthread_cond_init(&cond, NULL);
-    pthread_t tid[max_sessions];
-    for (int i = 0; i < max_sessions; i++) {
-        int error_num = pthread_create(&tid[i], NULL, NULL, NULL);
-        //pthread_mutex_init(&trinco[i], NULL);
-        if (error_num != 0) {
-            fprintf(stderr, "error creating thread: strerror(%s)\n", strerror(error_num));
-            return -1;
-        }
-    } */
-    int rx = open(pipename, O_RDONLY);
+    int rx = open(register_pipename, O_RDONLY);
     if (rx == -1) {
         fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
@@ -251,11 +252,11 @@ int main(int argc, char **argv) {
         }
         buffer[ret] = 0;
         char *ccode;
-        char client_pipename[256];
-        char box_name[32];
+        char client_pipename[PIPENAME_SIZE];
+        char box_name[BOXNAME_SIZE];
         slice(buffer, ccode, 0, 1);
         uint8_t code = (uint8_t) atoi(ccode);
-        slice(buffer, pipename, 1, 257);
+        slice(buffer, client_pipename, 1, 257);
         slice(buffer, box_name, 257, 289);
         switch (code){
         case(1):{
