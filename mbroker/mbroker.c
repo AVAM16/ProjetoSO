@@ -251,6 +251,10 @@ void remove_box(char * pipename, char * boxname) {
     close(rx);
 }
 
+void sort(char* list){
+
+}
+
 void list_boxes(char * pipename){
     uint8_t code = 8;
     char *ccode = convert(&code);
@@ -277,6 +281,7 @@ void list_boxes(char * pipename){
         for(int i=0; i<INODE_TABLE_SIZE;i++){
             namelist[i] = boxarray[i][0]; 
         }
+        sort(namelist);
         for(int j=0; j<INODE_TABLE_SIZE;j++){
             for(int x=0; x<max_sessions;x++){
                 if(namelist[j] == userarray[x].boxname){
