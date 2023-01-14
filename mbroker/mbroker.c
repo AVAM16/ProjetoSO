@@ -26,7 +26,7 @@
 #define PIPENAME_SIZE 256
 #define BOXNAME_SIZE 32
 #define ERROR_MESSAGE_SIZE 1024
-#define LIST_MESSAGE_SIZE 1061
+#define LIST_MESSAGE_SIZE 58
 #define BOX_SIZE_BITS 1024
 
 typedef struct
@@ -251,44 +251,58 @@ void remove_box(char * pipename, char * boxname) {
     close(rx);
 }
 
-void list_boxes(){
-    //char **names;
-    /**char **names;
-    int snames = 0;
-    int t = 0;
-    int pub = 0;
-    int sub = 0;
-    char temp;
-    char error_message[ERROR_MESSAGE_SIZE];
-    names = (char*)malloc(sizeof(char)*BOXNAME_SIZE);
-    for(int i=0; i < INODE_TABLE_SIZE; i++){
-        if(boxarray[i][0] != "\0"){
-            for(int j=0; j<snames;j++){
-                if(names[j] == boxarray[i][0]){
-                    t++;
+void list_boxes(char * pipename){
+    uint8_t code = 8;
+    char *ccode = convert(&code);
+    uint8_t last = 0;
+    char boxname[BOXNAME_SIZE];
+    char namelist[INODE_TABLE_SIZE];
+    int rx = open(pipename, O_WRONLY);
+    if(boxarray[0][0] == '\0' ){
+        char message[34];
+        last = 1;
+        char *llast = convert(&last);
+        for(int i=0; i<BOXNAME_SIZE;i++){
+            boxname[i]='\0';
+        }
+        memcpy(message,ccode,1);
+        memcpy(message,llast,1);
+        memcpy(message,boxname,BOXNAME_SIZE);
+        send_msg(rx, message);
+    }else{
+        uint64_t sub = 0;
+        uint64_t pub = 0;
+        uint64_t size = BOX_SIZE_BITS;
+        char message[LIST_MESSAGE_SIZE];
+        for(int i=0; i<INODE_TABLE_SIZE;i++){
+            namelist[i] = boxarray[i][0]; 
+        }
+        for(int j=0; j<INODE_TABLE_SIZE;j++){
+            for(int x=0; x<max_sessions;x++){
+                if(namelist[j] == userarray[x].boxname){
+                    if(userarray[x].i == 0){
+                        pub++;
+                    } else{
+                        sub++;
+                    }
                 }
             }
-            if(t == 0){
-                names[snames] = boxarray[i][0];
-                temp = boxarray[i][0];
-            }
-            t = 0;
-            uint8_t last;
-            if(i == INODE_TABLE_SIZE -1){
+            if(j == INODE_TABLE_SIZE-1){
                 last = 1;
-            } else {
-                last = 0;
             }
-            uint8_t code = 8;
-            char size = "1024";
-            char message[LIST_MESSAGE_SIZE];
-            char *ccode = convert(&code);
+            char *llast = convert(&last);
+            char *ssub = (char*)sub;
+            char *ppub = (char*)pub;
+            char *ssize = (char*)size;
             memcpy(message,ccode,1);
-            memcpy(message,last,1);
-            memcpy(message,temp,BOXNAME_SIZE);
-            memcpy(message,size,BOX_SIZE_BITS);
+            memcpy(message,llast,1);
+            memcpy(message,namelist[j],BOXNAME_SIZE);
+            memcpy(message,ssize,3);
+            memcpy(message,ppub,1);
+            memcpy(message,ssub,1);
+            send_msg(rx, message);
         }
-    }*/
+    }
 }
 
 int main(int argc, char **argv) {
