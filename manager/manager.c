@@ -125,7 +125,9 @@ int main(int argc, char **argv) {
                     fprintf(stdout, "ERROR %s\n", errormessage);
                 }
                 return 0;
-            } else{
+            } else if( code1 == 8){
+                return 0;
+            }else{
                 return 0;
             }
         }
