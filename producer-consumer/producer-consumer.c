@@ -29,7 +29,7 @@ int pcq_create(pc_queue_t *queue, size_t capacity){
     queue->pcq_tail = capacity - 1;
     queue->pcq_buffer = (text**)malloc(queue->pcq_capacity * sizeof(text*));
     for(int i = 0; i < queue->pcq_capacity; i++) {
-        queue->pcq_buffer[i] = (void*)malloc(sizeof(char)); // nao compreendo a parte do malloc ao pcq_buffer
+        queue->pcq_buffer[i] = (void*)malloc(sizeof(char)*1025); // nao compreendo a parte do malloc ao pcq_buffer
     }
     pthread_mutex_unlock(&queue->pcq_tail_lock);
     pthread_mutex_unlock(&queue->pcq_current_size_lock);
