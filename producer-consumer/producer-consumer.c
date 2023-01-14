@@ -1,15 +1,9 @@
 #include "producer-consumer.h"
-
+#include <stdlib.h>
 #define PIPENAME_SIZE 256
 #define BOXNAME_SIZE 32
+#define MESSAGELENGTH 289
 
-typedef struct 
-{
-    char* message;
-    char boxname[BOXNAME_SIZE];
-    char pipename[PIPENAME_SIZE];
-
-}text;
 
 int g_value = 0;
 
@@ -27,13 +21,14 @@ int pcq_create(pc_queue_t *queue, size_t capacity){
     queue->pcq_capacity = capacity;
     queue->pcq_head = queue->pcq_current_size = 0;
     queue->pcq_tail = capacity - 1;
-    queue->pcq_buffer = (text**)malloc(queue->pcq_capacity * sizeof(text*));
+    queue->pcq_buffer = (void**)malloc(queue->pcq_capacity * sizeof(char*));
     for(int i = 0; i < queue->pcq_capacity; i++) {
-        queue->pcq_buffer[i] = (void*)malloc(sizeof(char)*1025); // nao compreendo a parte do malloc ao pcq_buffer
+        queue->pcq_buffer[i] = (char*)malloc(sizeof(char)*MESSAGELENGTH);
     }
     pthread_mutex_unlock(&queue->pcq_tail_lock);
     pthread_mutex_unlock(&queue->pcq_current_size_lock);
     pthread_mutex_unlock(&queue->pcq_head_lock);
+    return 0;
 }
 
 int pcq_destroy(pc_queue_t *queue){
@@ -47,6 +42,7 @@ int pcq_destroy(pc_queue_t *queue){
     for(int i = 0; i < queue->pcq_capacity; i++) {
         free(queue->pcq_buffer[i]);
     }
+    return 0;
 }
 
 int pcq_enqueue(pc_queue_t *queue, void *elem){
@@ -67,6 +63,7 @@ int pcq_enqueue(pc_queue_t *queue, void *elem){
     queue->pcq_current_size = queue->pcq_current_size + 1;
     pthread_mutex_unlock(&queue->pcq_tail_lock);
     pthread_mutex_unlock(&queue->pcq_current_size_lock);
+    return 0;
 }
 
 void *pcq_dequeue(pc_queue_t *queue){
