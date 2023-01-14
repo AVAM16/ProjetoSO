@@ -303,6 +303,7 @@ void list_boxes(char * pipename){
             send_msg(rx, message);
         }
     }
+    close(rx);
 }
 
 int main(int argc, char **argv) {
