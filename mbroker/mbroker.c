@@ -26,6 +26,8 @@
 #define PIPENAME_SIZE 256
 #define BOXNAME_SIZE 32
 #define ERROR_MESSAGE_SIZE 1024
+#define LIST_MESSAGE_SIZE 1061
+#define BOX_SIZE_BITS 1024
 
 typedef struct
 {
@@ -69,6 +71,7 @@ void add_box(char * boxname) {
     for(int i = 0; i < INODE_TABLE_SIZE; i++) {
         if(boxarray[i][0] == '\0') {
             memcpy(boxarray[i], boxname, BOXNAME_SIZE);
+            break; //precisamos de parar o for senao todas as caixas ficam iguais
         }
     }
 }
@@ -248,6 +251,46 @@ void remove_box(char * pipename, char * boxname) {
     close(rx);
 }
 
+void list_boxes(char * pipename){
+    char **names;
+    /**char **names;
+    int snames = 0;
+    int t = 0;
+    int pub = 0;
+    int sub = 0;
+    char temp;
+    char error_message[ERROR_MESSAGE_SIZE];
+    names = (char*)malloc(sizeof(char)*BOXNAME_SIZE);
+    for(int i=0; i < INODE_TABLE_SIZE; i++){
+        if(boxarray[i][0] != "\0"){
+            for(int j=0; j<snames;j++){
+                if(names[j] == boxarray[i][0]){
+                    t++;
+                }
+            }
+            if(t == 0){
+                names[snames] = boxarray[i][0];
+                temp = boxarray[i][0];
+            }
+            t = 0;
+            uint8_t last;
+            if(i == INODE_TABLE_SIZE -1){
+                last = 1;
+            } else {
+                last = 0;
+            }
+            uint8_t code = 8;
+            char size = "1024";
+            char message[LIST_MESSAGE_SIZE];
+            char *ccode = convert(&code);
+            memcpy(message,ccode,1);
+            memcpy(message,last,1);
+            memcpy(message,temp,BOXNAME_SIZE);
+            memcpy(message,size,BOX_SIZE_BITS);
+        }
+    }*/
+}
+
 int main(int argc, char **argv) {
     if (signal(SIGINT, sigint_handler) == SIG_ERR) {
         exit(EXIT_FAILURE);
@@ -333,6 +376,7 @@ int main(int argc, char **argv) {
             break;
         }
         case(7):{
+            list_boxes(client_pipename);
             break;
         }
         default:
