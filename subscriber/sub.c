@@ -19,6 +19,9 @@
 #define MESSAGELENGTH 289
 #define PIPELENGTH 256
 #define BOXNAME 32 
+#define BUFFER_SIZE 1025
+
+int n_messages = 0;
 
 void send_msg(int tx, char const *str) {
     size_t len = strlen(str);
@@ -37,6 +40,7 @@ void send_msg(int tx, char const *str) {
 
 static void sigint_handler() {
     fprintf(stdout, "Caught SIGINT - that's all folks!\n");
+    fprintf(stdout, "%d", n_messages);
     exit(EXIT_SUCCESS);
 }
 
@@ -69,8 +73,21 @@ int main(int argc, char **argv) {
     memcpy(message, box_name, BOXNAME);
     send_msg(rx, message);
     close(rx);
+    int tx = open(pipename, O_RDONLY);
     for (;;) { // Loop forever, waiting for signals
-        pause(); // Block until a signal is caught
+        char buffer[BUFFER_SIZE];
+        ssize_t ret = read(tx, buffer, BUFFER_SIZE - 1);
+        if (ret > 0) {
+            buffer[ret] = 0;
+            char ccode1;
+            char message1[1024];
+            slice(buffer, &ccode1, 0, 1);
+            uint8_t code1 = (uint8_t) atoi(&ccode1);
+            slice(buffer, message1, 1, 1025);
+            if (code1 == 10) {
+                fprintf(stdout, "%s\n", message1);
+            }
+        }
     }
     fprintf(stderr, "usage: sub <register_pipe_name> <box_name>\n");
     return -1;

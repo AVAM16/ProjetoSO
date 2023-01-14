@@ -20,6 +20,7 @@
 #define MESSAGELISTLENGTH 257
 #define PIPELENGTH 256
 #define BOXNAME 32
+#define BUFFER_SIZE 1029
 
 static void print_usage() {
     fprintf(stderr, "usage: \n"
@@ -90,8 +91,44 @@ int main(int argc, char **argv) {
     } else{
         print_usage();
     }
+    int tx = open(pipename, O_RDONLY);
     for (;;) {
-        sleep(1);
+        char buffer[BUFFER_SIZE];
+        ssize_t ret = read(tx, buffer, BUFFER_SIZE - 1);
+        if (ret > 0) {
+            buffer[ret] = 0;
+            char ccode1;
+            char message1[1024];
+            slice(buffer, &ccode1, 0, 1);
+            uint8_t code1 = (uint8_t) atoi(&ccode1);
+            if (code1 == 4) {
+                char ccode2[4];
+                slice(buffer, ccode2, 1, 5);
+                uint32_t code2 = (uint32_t) atoi(ccode2);
+                if (code2 == 0){
+                    fprintf(stdout, "OK\n");
+                }else{
+                    char errormessage[1024];
+                    slice(buffer, errormessage, 5, 1029);
+                    fprintf(stdout, "ERROR %s\n", errormessage);
+                }
+                return 0;
+            } else if (code1 == 6){
+                char ccode2[4];
+                slice(buffer, ccode2, 1, 5);
+                uint32_t code2 = (uint32_t) atoi(ccode2);
+                if (code2 == 0){
+                    fprintf(stdout, "OK\n");
+                }else{
+                    char errormessage[1024];
+                    slice(buffer, errormessage, 5, 1029);
+                    fprintf(stdout, "ERROR %s\n", errormessage);
+                }
+                return 0;
+            } else{
+                return 0;
+            }
+        }
     }
     return -1;
 }

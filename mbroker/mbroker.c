@@ -251,8 +251,8 @@ void remove_box(char * pipename, char * boxname) {
     close(rx);
 }
 
-void list_boxes(char * pipename){
-    char **names;
+void list_boxes(){
+    //char **names;
     /**char **names;
     int snames = 0;
     int t = 0;
@@ -294,6 +294,9 @@ void list_boxes(char * pipename){
 int main(int argc, char **argv) {
     if (signal(SIGINT, sigint_handler) == SIG_ERR) {
         exit(EXIT_FAILURE);
+    }
+    if(tfs_init(NULL) == -1){
+        return -1;
     }
     if (argc != 3) {
         fprintf(stderr, "error\n");
@@ -376,7 +379,7 @@ int main(int argc, char **argv) {
             break;
         }
         case(7):{
-            list_boxes(client_pipename);
+            //list_boxes(client_pipename);
             break;
         }
         default:

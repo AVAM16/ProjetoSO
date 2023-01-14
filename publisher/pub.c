@@ -68,9 +68,18 @@ int main(int argc, char **argv) {
     memcpy(message, box_name, BOXNAME);
     send_msg(rx, message);
     close(rx);
+    int tx = open(pipename, O_WRONLY);
     for (;;) { // Loop forever, waiting for signals
-        pause(); // Block until a signal is caught
+        char input[1024];
+        fscanf(stdin, "%s", input);
+        uint8_t codetobox = 9;  
+        char ccodetobox = (char) codetobox;
+        char messagetobox[1025];
+        memcpy(messagetobox,ccodetobox, 1);
+        memcpy(messagetobox, input, 1024);
+        send_msg(tx, messagetobox);
     }
+    close(tx);
     fprintf(stderr, "usage: pub <register_pipe_name> <box_name>\n");
     return -1;
 }
