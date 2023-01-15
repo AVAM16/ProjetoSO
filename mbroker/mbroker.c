@@ -1,3 +1,10 @@
+/*
+Segundo Projecto de SO 2022/2023
+Realizado pelo Grupo 7 do turno L07
+Grupo constituido por:
+Artur Vasco Martins ist1102503
+Bernardo Augusto ist1102820
+*/
 #include "logging.h"
 #include <errno.h>
 #include <string.h>
@@ -47,7 +54,8 @@ pthread_mutex_t userarraylock = PTHREAD_MUTEX_INITIALIZER;
 pc_queue_t queue;
 int n_boxes = 0;
 pthread_mutex_t *thread_locks;
-pthread_cond_t cond; 
+pthread_cond_t *cond; 
+int *threads_used;
 
 static void sigint_handler() {
     fprintf(stdout, "Caught SIGINT - that's all folks!\n");
@@ -66,6 +74,11 @@ static void sigint_handler() {
         pthread_mutex_destroy(&thread_locks[c]);
     }
     free(thread_locks);
+    for(int d = 0; d < max_sessions; d++) {
+        pthread_cond_destroy(&cond[d]);
+    }
+    free(cond);
+    free(threads_used);
     exit(EXIT_SUCCESS);
 }
 
@@ -124,10 +137,18 @@ void slice(const char *str, char *result, size_t start, size_t end)
     memcpy(result, str + start, end - start);
 }
 
-void *threadfunction(){
+void *threadfunction(void* data){
     char message[BUFFER_SIZE];
-    //pthread_mutex_lock(&thread_locks[pthread_self()]);
-    memcpy(message,pcq_dequeue(&queue), BUFFER_SIZE);
+    const int thread_number = *((int*)data);
+    pthread_mutex_lock(&thread_locks[thread_number]);
+    void * dequeued = pcq_dequeue(&queue);
+    while (dequeued == NULL){
+        pthread_cond_wait(&cond[thread_number], &thread_locks[thread_number]);
+        dequeued = pcq_dequeue(&queue);
+    }
+    pthread_mutex_unlock(&thread_locks[thread_number]);
+    threads_used[thread_number] = 1;
+    memcpy(message,dequeued, BUFFER_SIZE);
     char ccode;
     char client_pipename[PIPENAME_SIZE];
     char box_name[BOXNAME_SIZE];
@@ -179,6 +200,7 @@ void *threadfunction(){
         }
 
     }
+    threads_used[thread_number] = 0;
     return NULL;
 }
 
@@ -205,6 +227,12 @@ void register_publisher(char * pipename, char * boxname, char * buffer){
         memcpy(userarray[sessions].boxname, boxname, BOXNAME_SIZE);
         memcpy(userarray[sessions].pipename, pipename, PIPENAME_SIZE);
         pcq_enqueue(&queue, buffer);
+        for (int d = 0; d < max_sessions; d++) {
+            if (threads_used[d] == 0) {
+                pthread_cond_signal(&cond[d]);
+                break;
+            }
+        }
         sessions++;
     }
     pthread_mutex_unlock(&userarraylock);
@@ -227,6 +255,12 @@ void register_subscriber(char * pipename, char * boxname, char * buffer){
         memcpy(userarray[sessions].boxname, boxname, BOXNAME_SIZE);
         memcpy(userarray[sessions].pipename, pipename, PIPENAME_SIZE);
         pcq_enqueue(&queue, buffer);
+        for (int d = 0; d < max_sessions; d++) {
+            if (threads_used[d] == 0) {
+                pthread_cond_signal(&cond[d]);
+                break;
+            }
+        }
         sessions++;
     }
     pthread_mutex_unlock(&userarraylock);
@@ -378,8 +412,20 @@ int main(int argc, char **argv) {
     userarray = malloc(INODE_TABLE_SIZE * sizeof(box));
     boxarray = (char**)malloc(sizeof(char*)*INODE_TABLE_SIZE);
     thread_locks = malloc(sizeof(pthread_mutex_t) * max_sessions);
+    cond = malloc(sizeof(pthread_cond_t)* max_sessions);
+    threads_used = (int *) malloc(sizeof(int) * max_sessions);
+    for (int gb = 0; gb < max_sessions; gb++) {
+        threads_used[gb] = 0;
+    }
     for (int g = 0; g < max_sessions; g++) {
         pthread_mutex_init(&thread_locks[g], NULL);
+    }
+    int threadvalues[max_sessions];
+    for (int gk = 0; gk < max_sessions; gk++) {
+        threadvalues[gk] = gk;
+    }
+    for (int gi = 0; gi < max_sessions; gi++) {
+        pthread_cond_init(&cond[gi], NULL);
     }
     pcq_create(&queue, max_sessions);
     for(int i=0; i<INODE_TABLE_SIZE; i++)
@@ -391,7 +437,7 @@ int main(int argc, char **argv) {
        boxarray[a][0] = '\0';
     }
     for(int i = 0; i < max_sessions; i++) {
-        pthread_create(&tid[i], NULL, threadfunction, NULL);
+        pthread_create(&tid[i], NULL, threadfunction, &threadvalues[i]);
     }
     for (int g = 0; g <  max_sessions; g++) {
         userarray[g].i = -1;
