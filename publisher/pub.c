@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
     uint8_t code = 1;     // [ code = 1 (uint8_t) ] | [ client_named_pipe_path (char[256]) ] | [ box_name (char[32]) ]
     char message[MESSAGELENGTH];
     char ccode = (char) code;
-    memcpy(message,ccode, 1);
+    memcpy(message,&ccode, 1);
     memcpy(message, pipename, PIPELENGTH);
     memcpy(message, box_name, BOXNAME);
     send_msg(rx, message);
@@ -71,11 +71,13 @@ int main(int argc, char **argv) {
     int tx = open(pipename, O_WRONLY);
     for (;;) { // Loop forever, waiting for signals
         char input[1024];
-        fscanf(stdin, "%s", input);
+        if (fscanf(stdin, "%s", input) == 0){
+            continue;
+        }
         uint8_t codetobox = 9;  
         char ccodetobox = (char) codetobox;
         char messagetobox[1025];
-        memcpy(messagetobox,ccodetobox, 1);
+        memcpy(messagetobox,&ccodetobox, 1);
         memcpy(messagetobox, input, 1024);
         send_msg(tx, messagetobox);
     }

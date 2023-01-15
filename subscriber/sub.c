@@ -44,6 +44,11 @@ static void sigint_handler() {
     exit(EXIT_SUCCESS);
 }
 
+void slice(const char *str, char *result, size_t start, size_t end)
+{
+    memcpy(result, str + start, end - start);
+}
+
 int main(int argc, char **argv) {
     if (signal(SIGINT, sigint_handler) == SIG_ERR) {
         exit(EXIT_FAILURE);
@@ -68,7 +73,7 @@ int main(int argc, char **argv) {
     uint8_t code = 2;
     char message[MESSAGELENGTH];
     char ccode = (char) code;
-    memcpy(message,ccode, 1);
+    memcpy(message,&ccode, 1);
     memcpy(message, pipename, PIPELENGTH);
     memcpy(message, box_name, BOXNAME);
     send_msg(rx, message);

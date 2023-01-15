@@ -1,5 +1,6 @@
 {
-    "files.associations": {
-        "cstdint": "c"
-    }
+  "files.associations": {
+    "*.pl": "prolog",
+    "producer-consumer.h": "c"
+  }
 }

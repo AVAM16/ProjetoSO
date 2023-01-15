@@ -14,8 +14,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include "operations.h"
-#include "operations.c"
-#include "state.c"
+#include "state.h"
 #include "producer-consumer.h"
 
 
@@ -28,6 +27,8 @@
 #define ERROR_MESSAGE_SIZE 1024
 #define LIST_MESSAGE_SIZE 58
 #define BOX_SIZE_BITS 1024
+static tfs_params fs_params;
+#define INODE_TABLE_SIZE (fs_params.max_inode_count)
 
 typedef struct
 {
@@ -36,8 +37,7 @@ typedef struct
     int i; //0 se publisher 1 se subscriber
 }box;
 
-/* pthread_cond_t cond;
-*/
+
 long unsigned int max_sessions = 0;
 int sessions = 0;
 pthread_t *tid;
@@ -45,10 +45,27 @@ box *userarray;
 char **boxarray;
 pthread_mutex_t userarraylock = PTHREAD_MUTEX_INITIALIZER;
 pc_queue_t queue;
-
+int n_boxes = 0;
+pthread_mutex_t *thread_locks;
+pthread_cond_t cond; 
 
 static void sigint_handler() {
     fprintf(stdout, "Caught SIGINT - that's all folks!\n");
+    pcq_destroy(&queue);
+    for(int a = 0; a < max_sessions; a++) {
+        pthread_join(tid[a], NULL);
+    }
+    free(tid);
+    free(userarray);
+    for(int b = 0; b < INODE_TABLE_SIZE; b++) {
+        free(boxarray[b]);
+    }
+    free(boxarray);
+    pthread_mutex_destroy(&userarraylock);
+    for(int c = 0; c < max_sessions; c++) {
+        pthread_mutex_destroy(&thread_locks[c]);
+    }
+    free(thread_locks);
     exit(EXIT_SUCCESS);
 }
 
@@ -72,6 +89,14 @@ void add_box(char * boxname) {
         if(boxarray[i][0] == '\0') {
             memcpy(boxarray[i], boxname, BOXNAME_SIZE);
             break; //precisamos de parar o for senao todas as caixas ficam iguais
+        }
+    }
+}
+
+void remove_box_boxarray(char * boxname) {
+    for(int i = 0; i < INODE_TABLE_SIZE; i++){
+        if (memcmp(boxarray[i], boxname, BOXNAME_SIZE) == 0){
+            boxarray[i][0] = '\0';
         }
     }
 }
@@ -101,6 +126,7 @@ void slice(const char *str, char *result, size_t start, size_t end)
 
 void *threadfunction(){
     char message[BUFFER_SIZE];
+    //pthread_mutex_lock(&thread_locks[pthread_self()]);
     memcpy(message,pcq_dequeue(&queue), BUFFER_SIZE);
     char ccode;
     char client_pipename[PIPENAME_SIZE];
@@ -121,8 +147,11 @@ void *threadfunction(){
                 slice(buffer, &ccode1, 0, 1);
                 uint8_t code1 = (uint8_t) atoi(&ccode1);
                 slice(buffer, message1, 1, 1025);
+                char file[33];
+                memcpy(file, "/", 1);
+                memcpy(file, box_name, 32);
                 if (code1 == 9) {
-                    int i = tfs_open(box_name, TFS_O_APPEND);
+                    int i = tfs_open(file, TFS_O_APPEND);
                     tfs_write(i, message1, 1024);
                     tfs_close(i);
                 }
@@ -133,7 +162,10 @@ void *threadfunction(){
         while(true){
             int rx = open(client_pipename, O_WRONLY);
             char buffer[ERROR_MESSAGE_SIZE];
-            int a = tfs_open(box_name, TFS_O_APPEND);
+            char file[33];
+            memcpy(file, "/", 1);
+            memcpy(file, box_name, 32);
+            int a = tfs_open(file, TFS_O_APPEND);
             while(tfs_read(a, buffer, ERROR_MESSAGE_SIZE) > 0) {
                 char message1[MESSAGE_SIZE];
                 uint8_t code1 = 10;
@@ -142,6 +174,7 @@ void *threadfunction(){
                 memcpy(message1, buffer, ERROR_MESSAGE_SIZE);
                 send_msg(rx, message1);
             }
+            tfs_close(a);
             close(rx);
         }
 
@@ -151,11 +184,16 @@ void *threadfunction(){
 
 void register_publisher(char * pipename, char * boxname, char * buffer){
     pthread_mutex_lock(&userarraylock);
-    if(tfs_lookup(boxname, ROOT_DIR_INUM) == -1){
+    char file[33];
+    memcpy(file, "/", 1);
+    memcpy(file, boxname, 32);
+    int xi = tfs_open(file, TFS_O_APPEND);
+    if(xi == -1){
         fprintf(stderr, "Erro\n");
         pthread_mutex_unlock(&userarraylock);
         return;
     } else{
+        tfs_close(xi);
         for (int a = 0; a < max_sessions ; a++) {
             if(memcmp(userarray[a].boxname, boxname, BOXNAME_SIZE) == 0 && userarray[a].i == 0){
                 fprintf(stderr,"Erro, Box já está associada com um Publisher");
@@ -175,16 +213,16 @@ void register_publisher(char * pipename, char * boxname, char * buffer){
 
 void register_subscriber(char * pipename, char * boxname, char * buffer){
     pthread_mutex_lock(&userarraylock);
-    if(tfs_lookup(boxname, ROOT_DIR_INUM) == -1){
+    char file[33];
+    memcpy(file, "/", 1);
+    memcpy(file, boxname, 32);
+    int xi = tfs_open(file, TFS_O_APPEND);
+    if(xi == -1){
         fprintf(stderr, "Erro\n");
         pthread_mutex_unlock(&userarraylock);
         return;
     } else{
-        for (int a = 0; a < max_sessions; a++) {
-
-            pthread_mutex_unlock(&userarraylock);
-            return;
-        }
+        tfs_close(xi);
         userarray[sessions].i = 1;
         memcpy(userarray[sessions].boxname, boxname, BOXNAME_SIZE);
         memcpy(userarray[sessions].pipename, pipename, PIPENAME_SIZE);
@@ -197,18 +235,18 @@ void register_subscriber(char * pipename, char * boxname, char * buffer){
 void create_box(char * pipename, char * boxname) {
     int32_t return_code;
     char error_message[ERROR_MESSAGE_SIZE];
-    if(tfs_lookup(boxname, ROOT_DIR_INUM) != -1){
+    char file[33];
+    memcpy(file, "/", 1);
+    memcpy(file, boxname, 32);
+    return_code = 0;
+    int i = tfs_open(file, TFS_O_CREAT);
+    if(i != -1) {
+        memcpy(error_message, "Caixa existe", 13);
         return_code = -1;
-        memcpy(error_message, "Caixa existe", ERROR_MESSAGE_SIZE);
-    } else{
-        return_code = 0;
+    } else {
         error_message[0] = '\0';
-        int i = tfs_open(boxname, TFS_O_CREAT);
-        if(tfs_close(i) == -1) {
-            memcpy(error_message, "ERRO", 5);
-        } else {
-            add_box(boxname);
-        }
+        add_box(boxname);
+        n_boxes++;
     }
     int rx = open(pipename, O_WRONLY);
     char creturn_code[4];
@@ -226,16 +264,31 @@ void create_box(char * pipename, char * boxname) {
 void remove_box(char * pipename, char * boxname) {
     int32_t return_code;
     char error_message[ERROR_MESSAGE_SIZE];
-    if(tfs_lookup(boxname, ROOT_DIR_INUM) == -1){
+    char file[33];
+    memcpy(file, "/", 1);
+    memcpy(file, boxname, 32);
+    int i = tfs_open(file, TFS_O_CREAT);
+    if(i == -1) {
+        memcpy(error_message, "Caixa nao existe", 13);
         return_code = -1;
-        memcpy(error_message, "Caixa nao existe", 17);
     } else{
         return_code = 0;
         error_message[0] = '\0';
-        if (tfs_unlink(boxname) == -1) {
-            memcpy(error_message, "ERRO", ERROR_MESSAGE_SIZE);
+        if (tfs_unlink(file) == -1) {
+            memcpy(error_message, "ERRO", 5);
         }else{
-            add_box(boxname);
+            remove_box_boxarray(boxname);
+            n_boxes--;
+            pthread_mutex_lock(&userarraylock);
+            for (int a = 0; a < max_sessions ; a++) {
+                if(memcmp(userarray[a].boxname, boxname, BOXNAME_SIZE) == 0){
+                    userarray[a].boxname[0] = '\0';
+                    userarray[a].pipename[0] = '\0';
+                    userarray[a].i = -1;
+                    sessions--;
+                }
+            }
+            pthread_mutex_unlock(&userarraylock);
         }
     }
     int rx = open(pipename, O_WRONLY);
@@ -251,62 +304,57 @@ void remove_box(char * pipename, char * boxname) {
     close(rx);
 }
 
-int cmpfunc(const void * a, const void * b){
-    return  *(char*)a - *(char*)b;
+int cmpfunc(const void *a, const void *b) {
+    return strcmp(*(const char **)a, *(const char **)b);
 }
 
 void list_boxes(char * pipename){
     uint8_t code = 8;
     char *ccode = convert(&code);
     uint8_t last = 0;
-    char boxname[BOXNAME_SIZE];
-    char namelist[INODE_TABLE_SIZE];
+    char namelist[n_boxes][BOXNAME_SIZE];
     int rx = open(pipename, O_WRONLY);
-    if(boxarray[0][0] == '\0' ){
-        char message[34];
-        last = 1;
-        char *llast = convert(&last);
-        for(int i=0; i<BOXNAME_SIZE;i++){
-            boxname[i]='\0';
+    uint64_t sub = 0;
+    uint64_t pub = 0;
+    uint64_t size = BOX_SIZE_BITS;
+    char message[LIST_MESSAGE_SIZE];
+    int n = 0;
+    for(int i = 0; i<n_boxes;i++){
+        for(int a = n; a < INODE_TABLE_SIZE; a++) {
+            if(boxarray[a][0] != '\0'){
+                memcpy(namelist[i], boxarray[a], BOXNAME_SIZE);
+                n = a + 1;
+                break;
+            }
         }
-        memcpy(message,ccode,1);
-        memcpy(message,llast,1);
-        memcpy(message,boxname,BOXNAME_SIZE);
-        send_msg(rx, message);
-    }else{
-        uint64_t sub = 0;
-        uint64_t pub = 0;
-        uint64_t size = BOX_SIZE_BITS;
-        char message[LIST_MESSAGE_SIZE];
-        for(int i=0; i<INODE_TABLE_SIZE;i++){
-            namelist[i] = boxarray[i][0]; 
-        }
-        qsort(namelist,INODE_TABLE_SIZE,sizeof(char),cmpfunc);
-        for(int j=0; j<INODE_TABLE_SIZE;j++){
-            for(int x=0; x<max_sessions;x++){
-                if(namelist[j] == userarray[x].boxname){
-                    if(userarray[x].i == 0){
-                        pub++;
-                    } else{
-                        sub++;
-                    }
+    }
+    qsort(namelist,(size_t) n_boxes,sizeof(char)* BOXNAME_SIZE,cmpfunc);
+    for(int j=0; j<n_boxes;j++){
+        for(int x=0; x<max_sessions;x++){
+            if(namelist[j] == userarray[x].boxname){
+                if(userarray[x].i == 0){
+                    pub++;
+                } else{
+                    sub++;
                 }
             }
-            if(j == INODE_TABLE_SIZE-1){
-                last = 1;
-            }
-            char *llast = convert(&last);
-            char *ssub = (char*)sub;
-            char *ppub = (char*)pub;
-            char *ssize = (char*)size;
-            memcpy(message,ccode,1);
-            memcpy(message,llast,1);
-            memcpy(message,namelist[j],BOXNAME_SIZE);
-            memcpy(message,ssize,3);
-            memcpy(message,ppub,1);
-            memcpy(message,ssub,1);
-            send_msg(rx, message);
         }
+        if(j == n_boxes-1){
+            last = 1;
+        }
+        char *llast = convert(&last);
+        char *ssub = (char*)sub;
+        char *ppub = (char*)pub;
+        char *ssize = (char*)size;
+        memcpy(message,ccode,1);
+        memcpy(message,llast,1);
+        memcpy(message,namelist[j],BOXNAME_SIZE);
+        memcpy(message,ssize,8);
+        memcpy(message,ppub,8);
+        memcpy(message,ssub,8);
+        send_msg(rx, message);
+        sub = 0;
+        pub = 0;
     }
     close(rx);
 }
@@ -329,6 +377,10 @@ int main(int argc, char **argv) {
     tid = malloc(max_sessions * sizeof(pthread_t));
     userarray = malloc(INODE_TABLE_SIZE * sizeof(box));
     boxarray = (char**)malloc(sizeof(char*)*INODE_TABLE_SIZE);
+    thread_locks = malloc(sizeof(pthread_mutex_t) * max_sessions);
+    for (int g = 0; g < max_sessions; g++) {
+        pthread_mutex_init(&thread_locks[g], NULL);
+    }
     pcq_create(&queue, max_sessions);
     for(int i=0; i<INODE_TABLE_SIZE; i++)
     {
@@ -399,7 +451,7 @@ int main(int argc, char **argv) {
             break;
         }
         case(7):{
-            //list_boxes(client_pipename);
+            list_boxes(client_pipename);
             break;
         }
         default:

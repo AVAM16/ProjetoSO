@@ -44,6 +44,11 @@ void send_msg(int tx, char const *str) {
     }
 }
 
+void slice(const char *str, char *result, size_t start, size_t end)
+{
+    memcpy(result, str + start, end - start);
+}
+
 int main(int argc, char **argv) {
     char * register_pipename ;
     char pipename[PIPELENGTH];
@@ -58,7 +63,7 @@ int main(int argc, char **argv) {
         uint8_t code = 7;
         char message[MESSAGELISTLENGTH];
         char ccode = (char) code;
-        memcpy(message,ccode, 1);
+        memcpy(message,&ccode, 1);
         memcpy(message, pipename, PIPELENGTH);
         send_msg(rx, message);
         close(rx);
@@ -74,7 +79,7 @@ int main(int argc, char **argv) {
             uint8_t code = 3;
             char message[MESSAGELENGTH];
             char ccode = (char) code;
-            memcpy(message,ccode, 1);
+            memcpy(message,&ccode, 1);
             memcpy(message, pipename, PIPELENGTH);
             memcpy(message, box_name, BOXNAME);
             send_msg(rx, message);
@@ -82,7 +87,7 @@ int main(int argc, char **argv) {
             uint8_t code = 5;
             char message[MESSAGELENGTH];
             char ccode = (char) code;
-            memcpy(message,ccode, 1);
+            memcpy(message,&ccode, 1);
             memcpy(message, pipename, PIPELENGTH);
             memcpy(message, box_name, BOXNAME);
             send_msg(rx, message);
@@ -98,7 +103,6 @@ int main(int argc, char **argv) {
         if (ret > 0) {
             buffer[ret] = 0;
             char ccode1;
-            char message1[1024];
             slice(buffer, &ccode1, 0, 1);
             uint8_t code1 = (uint8_t) atoi(&ccode1);
             if (code1 == 4) {
@@ -125,12 +129,26 @@ int main(int argc, char **argv) {
                     fprintf(stdout, "ERROR %s\n", errormessage);
                 }
                 return 0;
-            } else if( code1 == 8){
-                return 0;
-            }else{
-                return 0;
+            } else if(code1 == 8){
+                char clast;
+                slice(buffer, &clast, 1, 2);
+                uint8_t last = (uint8_t) atoi(&clast);
+                char box_name[32];
+                slice(buffer, box_name, 2, 34);
+                char sbox_size[8];
+                slice(buffer, sbox_size, 34, 42);
+                uint64_t box_size = (uint64_t) atoi(sbox_size);
+                char sn_publishers[8];
+                slice(buffer, sn_publishers, 42, 50);
+                uint64_t n_publishers = (uint64_t) atoi(sn_publishers);
+                char sn_subscribers[8];
+                slice(buffer, sn_subscribers, 50, 58);
+                uint64_t n_subscribers = (uint64_t) atoi(sn_subscribers);
+                fprintf(stdout, "%s %zu %zu %zu\n", box_name, box_size, n_publishers, n_subscribers);
+                if (last == 1) {
+                    return 0;
+                }
             }
         }
     }
-    return -1;
 }
